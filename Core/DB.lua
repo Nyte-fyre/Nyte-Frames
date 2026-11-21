@@ -30,7 +30,7 @@ local function frameDefaults(t)
     refPos = { x = 0, y = 0 }, -- center offset in reference pixels
     powerHeightPct = 20,       -- 0 hides the power bar
     textMode = nil,            -- nil = use general.textMode
-    nameColor = "class",       -- "class" | "white" | "reaction"
+    nameColor = "white",       -- "class" | "white" | "reaction" (white reads best on class-colored bars)
     showName = true, showHealthText = true, showPowerText = false,
     auras = {
       buffs = true, debuffs = true, max = 8, size = 18, growth = "RIGHT",
