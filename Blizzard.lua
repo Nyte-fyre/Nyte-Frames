@@ -14,6 +14,8 @@ Blizzard.hiddenParent = hiddenParent
 Blizzard.MAP = {
   player = { "PlayerFrame" },
   target = { "TargetFrame" },
+  targettarget = { "TargetFrameToT" },
+  -- targettargettarget: Blizzard has no frame for it
 }
 
 Blizzard.hidden = {}

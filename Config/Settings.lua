@@ -13,6 +13,8 @@ local widgets = {}
 Settings.PAGES = {
   { key = "player", label = "Player" },
   { key = "target", label = "Target" },
+  { key = "targettarget", label = "ToT" },
+  { key = "targettargettarget", label = "ToToT" },
 }
 
 local function label(parent, text, size)
@@ -134,7 +136,7 @@ end
 
 local function build()
   window = CreateFrame("Frame", "NyteFramesSettings", UIParent)
-  window:SetSize(420, 470)
+  window:SetSize(420, 495)
   window:SetPoint("CENTER")
   window:SetFrameStrata("DIALOG")
   window:SetMovable(true)
@@ -208,7 +210,7 @@ local function build()
   end)
   widgets.reset:SetPoint("TOPLEFT", 14, py - 254)
 
-  local note = label(window, "|cff888888Drag-to-move and resize handles come with unlock mode (milestone 4).|r", 10)
+  local note = label(window, "|cff888888Blizzard's target-of-target lives inside its target frame, so it stays hidden while Nyte Target is on. Drag-to-move and resize handles come with unlock mode (milestone 4).|r", 10)
   note:SetPoint("BOTTOMLEFT", 14, 12)
   note:SetWidth(390)
 end

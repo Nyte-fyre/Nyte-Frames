@@ -1,5 +1,6 @@
 -- Frames.lua: spawns the single-unit frames and keeps them current.
--- Milestone 2: player and target. Later milestones add to SINGLE.
+-- player, target, target of target (event-driven) and target of target of
+-- target (no events exist for it: a throttled 0.1s poll while it's shown).
 local _, NF = ...
 local Frames = {}
 NF.Frames = Frames
@@ -8,6 +9,8 @@ local UB = NF.UnitButton
 Frames.SINGLE = {
   { key = "player", unit = "player" },
   { key = "target", unit = "target" },
+  { key = "targettarget", unit = "targettarget" },
+  { key = "targettargettarget", unit = "targettargettarget", poll = 0.1 },
 }
 Frames.byKey = {}
 
@@ -48,6 +51,17 @@ local function spawn(def)
   else
     RegisterUnitWatch(b) -- shows/hides with the unit, combat-safe
   end
+  if def.poll then
+    -- OnUpdate only runs while the frame is shown (i.e. the unit exists)
+    local elapsed = 0
+    b:SetScript("OnUpdate", function(self, e)
+      elapsed = elapsed + e
+      if elapsed < def.poll then return end
+      elapsed = 0
+      local ok, err = pcall(UB.UpdateAll, self)
+      if not ok then NF.Error("poll " .. self.key, err) end
+    end)
+  end
 end
 
 function Frames.Spawn()
@@ -75,9 +89,23 @@ function Frames.UpdateAll()
   end
 end
 
-NF.On("PLAYER_TARGET_CHANGED", function()
-  local b = Frames.byKey.target
-  if b then UB.UpdateAll(b) end
+-- Target changes ripple up the chain: target -> ToT -> ToToT.
+local CHAIN = { "target", "targettarget", "targettargettarget" }
+local function updateChain(from)
+  for i = from, #CHAIN do
+    local b = Frames.byKey[CHAIN[i]]
+    if b then
+      local ok, err = pcall(UB.UpdateAll, b)
+      if not ok then NF.Error("update " .. b.key, err) end
+    end
+  end
+end
+
+NF.On("PLAYER_TARGET_CHANGED", function() updateChain(1) end)
+NF.On("UNIT_TARGET", function(_, unit)
+  if NF.Compat.IsSecret(unit) then return end
+  if unit == "target" then updateChain(2)
+  elseif unit == "targettarget" then updateChain(3) end
 end)
 
 NF.On("PLAYER_ENTERING_WORLD", function() Frames.UpdateAll() end)

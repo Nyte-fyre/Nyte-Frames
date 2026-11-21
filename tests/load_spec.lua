@@ -116,6 +116,7 @@ C_UIFileAsset = { IsKnownFile = function() return true end }
 UIParent = CreateFrame("Frame", "UIParent")
 PlayerFrame = CreateFrame("Frame", "PlayerFrame")
 TargetFrame = CreateFrame("Frame", "TargetFrame")
+TargetFrameToT = CreateFrame("Frame", "TargetFrameToT")
 UISpecialFrames = {}
 tinsert = table.insert
 unpack = unpack or table.unpack
@@ -139,7 +140,7 @@ time = os.time
 date = os.date
 function GetRealmName() return "Realm" end
 function GetUnitName(u) return u == "player" and "Nyte Fyre" or nil end
-local units = { player = true, target = true, party1 = true }
+local units = { player = true, target = true, party1 = true, targettarget = true, targettargettarget = true }
 function UnitExists(u) return units[u] or false end
 function UnitName(u) if units[u] then return u == "target" and secret("Mob") or "Nyte", "Fyre" end end
 function UnitGUID(u) return units[u] and ("Player-1-" .. u) or nil end
@@ -314,6 +315,22 @@ ns.profile.frames.player.width = 300
 ns.Frames.Refresh("player")
 inCombat = false
 fire("PLAYER_REGEN_ENABLED")
+
+-- M3: ToT and ToToT
+local tt, ttt = _G.NyteFrames_targettarget, _G.NyteFrames_targettargettarget
+check(tt and ttt and watched[tt] and watched[ttt], "ToT and ToToT created with unit watch")
+check(tt._scripts.OnUpdate == nil, "ToT is event-driven (no poll)")
+check(type(ttt._scripts.OnUpdate) == "function", "ToToT polls")
+ttt.healthText._text = nil
+ttt._scripts.OnUpdate(ttt, 0.05)
+check(ttt.healthText._text == nil, "poll throttled below 0.1s")
+ttt._scripts.OnUpdate(ttt, 0.06)
+check(ttt.healthText._text ~= nil, "poll updates after 0.1s")
+tt.healthText._text = nil
+fire("UNIT_TARGET", "target")
+check(tt.healthText._text ~= nil, "UNIT_TARGET on target refreshes ToT")
+fire("UNIT_TARGET", secret("target"))
+check(TargetFrameToT._parent == ns.Blizzard.hiddenParent, "Blizzard ToT hidden")
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 

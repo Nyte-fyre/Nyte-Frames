@@ -3,7 +3,7 @@
 Flat, resizable unit frames for **WoW: Forever**. Party and raid frames sit above
 your player frame, sorted tank, healer, DPS, and grow to the left as groups are added.
 
-**Status: v0.2.0, milestone 2: player and target frames.** The probe still
+**Status: v0.3.0, milestone 3: player, target, target of target and target of target of target.** The probe still
 records what the client lets addons read.
 
 ## Commands
