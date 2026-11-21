@@ -1,7 +1,7 @@
 -- Init.lua: namespace, event bus, slash commands.
 local ADDON, NF = ...
 NF.ADDON = ADDON
-NF.VERSION = "0.1.0"
+NF.VERSION = "0.2.0"
 _G.NyteFrames = NF -- for /dump and other addons; nothing secure reads it
 
 local PREFIX = "|cff8a7dffNyte Frames|r: "
@@ -77,6 +77,8 @@ end)
 NF.On("PLAYER_LOGIN", function()
   NF.Compat.Run()
   NF.Probe.Start()
+  NF.Frames.Spawn()
+  NF.Blizzard.Apply()
 end)
 
 ---------------------------------------------------------------------------
@@ -87,6 +89,7 @@ NF.commands = commands
 
 commands.help = function()
   NF.Print("v" .. NF.VERSION .. " commands:")
+  print("  /nf                  - open settings")
   print("  /nf probe            - probe status (it records automatically)")
   print("  /nf probe now        - take an out-of-combat snapshot now")
   print("  /nf probe inspect    - inspect your target's talents (role detection test)")
@@ -94,8 +97,11 @@ commands.help = function()
   print("  /nf probe reset      - clear everything the probe recorded")
   print("  /nf errors           - list Lua errors Nyte Frames caught")
   print("  /nf profile          - show the active profile")
-  print("Frames arrive in the next milestone. Type /reload to save probe data.")
+  print("Type /reload to save probe data.")
 end
+
+commands.config = function() NF.Settings.Toggle() end
+commands.settings = commands.config
 
 commands.errors = function()
   if #NF.errors == 0 then NF.Print("no errors caught this session.") return end
@@ -115,7 +121,7 @@ end
 local function slash(msg)
   msg = (msg or ""):gsub("^%s+", ""):gsub("%s+$", "")
   local cmd, rest = msg:match("^(%S+)%s*(.*)$")
-  cmd = cmd and cmd:lower() or "help"
+  cmd = cmd and cmd:lower() or "config"
   local fn = commands[cmd] or commands.help
   local ok, err = pcall(fn, rest or "")
   if not ok then

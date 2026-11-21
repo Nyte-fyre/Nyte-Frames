@@ -14,20 +14,27 @@ Frames.byKey = {}
 -- First run on this profile: the defaults were measured on a 1037px-tall
 -- screenshot. Scale them to this UI once and store absolute values, so
 -- settings and import/export always deal in real sizes.
+local function scale()
+  local h = UIParent:GetHeight()
+  if type(h) ~= "number" or h <= 0 then return nil end
+  return h / NF.DB.REF_H
+end
+
+-- Scale one frame's reference defaults to this UI and store real values.
+function Frames.ScaleFrame(cfg)
+  local s = scale() or 1
+  cfg.width = math.floor(cfg.width * s + 0.5)
+  cfg.height = math.floor(cfg.height * s + 0.5)
+  if cfg.refPos and not cfg.pos then
+    cfg.pos = { point = "CENTER", relPoint = "CENTER",
+      x = math.floor(cfg.refPos.x * s + 0.5), y = math.floor(cfg.refPos.y * s + 0.5) }
+  end
+end
+
 function Frames.Calibrate()
   local p = NF.profile
-  if p.calibrated then return end
-  local h = UIParent:GetHeight()
-  if type(h) ~= "number" or h <= 0 then return end
-  local s = h / NF.DB.REF_H
-  for _, cfg in pairs(p.frames) do
-    cfg.width = math.floor(cfg.width * s + 0.5)
-    cfg.height = math.floor(cfg.height * s + 0.5)
-    if cfg.refPos and not cfg.pos then
-      cfg.pos = { point = "CENTER", relPoint = "CENTER",
-        x = math.floor(cfg.refPos.x * s + 0.5), y = math.floor(cfg.refPos.y * s + 0.5) }
-    end
-  end
+  if p.calibrated or not scale() then return end
+  for _, cfg in pairs(p.frames) do Frames.ScaleFrame(cfg) end
   p.calibrated = true
 end
 

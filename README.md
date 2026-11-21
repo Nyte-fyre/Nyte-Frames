@@ -3,12 +3,12 @@
 Flat, resizable unit frames for **WoW: Forever**. Party and raid frames sit above
 your player frame, sorted tank, healer, DPS, and grow to the left as groups are added.
 
-**Status: v0.1.0, milestone 1 (skeleton + API probe).** No frames yet. This build
-records what the client lets addons read, so the frames can be designed around it.
+**Status: v0.2.0, milestone 2: player and target frames.** The probe still
+records what the client lets addons read.
 
 ## Commands
 
-- `/nf` or `/nyteframes` - help
+- `/nf` or `/nyteframes` - settings (`/nf help` for commands)
 - `/nf probe` - probe status (it records by itself)
 - `/nf probe now` - take a snapshot now
 - `/nf probe inspect` - test talent inspection on your target

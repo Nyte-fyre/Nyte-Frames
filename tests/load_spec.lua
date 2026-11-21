@@ -49,6 +49,23 @@ function FrameMethods.GetText(self) return self._text end
 function FrameMethods.SetAlphaFromBoolean() end
 function FrameMethods.SetVertexColorFromBoolean() end
 function FrameMethods.SetTimerDuration() end
+function FrameMethods.GetFrameLevel() return 1 end
+function FrameMethods.GetHeight() return 768 end
+function FrameMethods.GetThumbTexture(self) self._thumb = self._thumb or CreateFrame("Texture") return self._thumb end
+function FrameMethods.Show(self) self._shown = true if self._scripts.OnShow then self._scripts.OnShow(self) end end
+function FrameMethods.Hide(self) self._shown = false end
+function FrameMethods.SetShown(self, v) if v then self:Show() else self:Hide() end end
+function FrameMethods.SetFormattedText(self, fmt, ...)
+  for i = 1, select("#", ...) do
+    local v = select(i, ...)
+    if issecretvalue(v) then self._text = "<secret display>" return end
+  end
+  self._text = string.format(fmt, ...)
+end
+function FrameMethods.SetAttribute(self, k, v) self._attr = self._attr or {} self._attr[k] = v end
+function FrameMethods.SetParent(self, p) self._parent = p end
+function FrameMethods.SetMinMaxValues(self, a, b) self._min, self._max = a, b end
+function FrameMethods.SetValue(self, v) self._value = v end
 
 function CreateFrame(kind, name, parent, template)
   if template == "BrokenTemplate" then error("no template") end
@@ -97,6 +114,18 @@ bit = {
 }
 C_UIFileAsset = { IsKnownFile = function() return true end }
 UIParent = CreateFrame("Frame", "UIParent")
+PlayerFrame = CreateFrame("Frame", "PlayerFrame")
+TargetFrame = CreateFrame("Frame", "TargetFrame")
+UISpecialFrames = {}
+tinsert = table.insert
+unpack = unpack or table.unpack
+watched = {}
+function RegisterUnitWatch(f) watched[f] = true end
+StaticPopupDialogs = {}
+function StaticPopup_Show(name) lastPopup = name end
+function ReloadUI() end
+function BreakUpLargeNumbers(v) return v end
+function UnitIsGhost() return false end
 STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 WOW_PROJECT_ID = 1
 RAID_CLASS_COLORS = { PALADIN = { r = 0.96, g = 0.55, b = 0.73 } }
@@ -207,7 +236,7 @@ fire("ADDON_LOADED", "NyteFrames")
 fire("PLAYER_LOGIN")
 runTimers()
 check(NyteFramesDB and NyteFramesDB.profiles.Default, "default profile created")
-check(NyteFramesDB.profiles.Default.frames.raid.width == 95, "raid defaults filled")
+check(ns.DB.DEFAULTS.frames.raid.width == 95 and NyteFramesDB.profiles.Default.frames.raid.width > 0, "raid defaults filled")
 check(NyteFramesProbeDB and NyteFramesProbeDB.static, "probe static recorded")
 check(NyteFramesProbeDB.static.ownTalents and NyteFramesProbeDB.static.ownTalents.total == 3, "own talents bucketed")
 
@@ -264,6 +293,27 @@ local function scan(t, path, seen)
 end
 scan(NyteFramesProbeDB, "NyteFramesProbeDB")
 scan(NyteFramesDB, "NyteFramesDB")
+
+-- M2 frames
+local pb, tb = _G.NyteFrames_player, _G.NyteFrames_target
+check(pb and tb, "player and target buttons created")
+check(pb._attr.unit == "player" and pb._attr["*type2"] == "togglemenu", "secure attributes set")
+check(watched[tb] and not watched[pb], "target uses unit watch")
+check(pb.healthText._text == "<secret display>", "secret health reached the text via display path: " .. tostring(pb.healthText._text))
+check(PlayerFrame._parent == ns.Blizzard.hiddenParent and TargetFrame._parent == ns.Blizzard.hiddenParent, "Blizzard frames hidden")
+check(NyteFramesDB.profiles.Default.calibrated and NyteFramesDB.profiles.Default.frames.player.pos, "calibrated")
+check(NyteFramesDB.profiles.Default.frames.player.width == math.floor(195 * 768 / 1037 + 0.5), "size scaled to UI")
+ns.Settings.Show("target")
+check(_G.NyteFramesSettings and _G.NyteFramesSettings._shown, "settings window opens on /nf")
+ns.profile.frames.player.powerHeightPct = 0
+ns.Frames.Refresh("player")
+check(not pb.power._shown, "power 0 hides the power bar")
+-- in combat a resize is queued, not applied
+inCombat = true
+ns.profile.frames.player.width = 300
+ns.Frames.Refresh("player")
+inCombat = false
+fire("PLAYER_REGEN_ENABLED")
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 
