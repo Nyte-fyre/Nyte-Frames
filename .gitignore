@@ -1,0 +1,5 @@
+CLAUDE.md
+private/
+__pycache__/
+*.pyc
+docs/probe-raw.md

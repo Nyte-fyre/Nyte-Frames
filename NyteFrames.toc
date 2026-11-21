@@ -1,0 +1,21 @@
+## Interface: 16001
+## Title: Nyte Frames
+## Notes: Flat, resizable unit frames with role-sorted party and raid columns.
+## Author: Nyte
+## Version: 0.1.0
+## SavedVariables: NyteFramesDB, NyteFramesProbeDB
+## SavedVariablesPerCharacter: NyteFramesCharDB
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+Libs\LibSharedMedia-3.0\lib.xml
+Libs\LibSerialize\lib.xml
+Libs\LibDeflate\lib.xml
+
+Core\Init.lua
+Core\Compat.lua
+Core\DB.lua
+Core\Media.lua
+Core\Probe.lua
+
+Layout\Sorting.lua
