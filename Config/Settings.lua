@@ -159,7 +159,7 @@ local function build()
 
   -- general section
   local y = -44
-  widgets.textMode = cycle(window, "Text (non-player)", { { "percent", "Percent" }, { "number", "Number" } },
+  widgets.textMode = cycle(window, "Text (non-player)", { { "percent", "Percent" }, { "number", "Number" }, { "both", "# and %" } },
     function() return NF.profile.general.textMode end,
     function(v) NF.profile.general.textMode = v NF.Frames.Refresh() end)
   widgets.textMode:SetPoint("TOPLEFT", 14, y)
@@ -193,7 +193,7 @@ local function build()
     function() return cfg().powerHeightPct end, function(v) cfg().powerHeightPct = v changed() end)
   widgets.power:SetPoint("TOPLEFT", 14, py - 130)
   widgets.frameText = cycle(window, "Text on this frame",
-    { { "global", "Use global" }, { "percent", "Percent" }, { "number", "Number" } },
+    { { "global", "Use global" }, { "percent", "Percent" }, { "number", "Number" }, { "both", "# and %" } },
     function() return cfg().textMode or "global" end,
     function(v) cfg().textMode = (v ~= "global") and v or nil changed() end)
   widgets.frameText:SetPoint("TOPLEFT", 14, py - 160)

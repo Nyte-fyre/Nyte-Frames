@@ -47,7 +47,7 @@ end
 
 DB.DEFAULTS = {
   general = {
-    textMode = "percent",      -- "number" | "percent" for every non-player frame
+    textMode = "percent",      -- "number" | "percent" | "both" for every non-player frame
     abbreviate = true,         -- 12.3k / 1.2m
     texture = "Nyte Flat",
     font = "Friz Quadrata TT",

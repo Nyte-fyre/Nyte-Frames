@@ -423,7 +423,8 @@ function EditMode.RefreshPreview()
     f.bar:SetVertexColor(NF.Compat.ClassColor(e.member.class))
     f.name:SetText(e.member.name)
     f.name:SetWidth(math.max(10, c.width - 20))
-    f.value:SetText((c.textMode or NF.profile.general.textMode) == "number" and "12.3k" or "100%")
+    local mode = c.textMode or NF.profile.general.textMode
+    f.value:SetText(mode == "number" and "12.3k" or (mode == "both" and "12.3k | 100%" or "100%"))
     f.role:SetText(NF.UnitButton.ROLE_LETTER[e.member.role] or "")
     f:Show()
   end
