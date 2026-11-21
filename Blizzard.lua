@@ -15,6 +15,7 @@ Blizzard.MAP = {
   player = { "PlayerFrame" },
   target = { "TargetFrame" },
   targettarget = { "TargetFrameToT" },
+  party = { "PartyFrame", "CompactPartyFrame" },
   -- targettargettarget: Blizzard has no frame for it
 }
 

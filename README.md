@@ -3,7 +3,7 @@
 Flat, resizable unit frames for **WoW: Forever**. Party and raid frames sit above
 your player frame, sorted tank, healer, DPS, and grow to the left as groups are added.
 
-**Status: v0.4.0, milestone 4: player, target, ToT and ToToT frames plus unlock mode.** The probe still
+**Status: v0.5.0, milestone 5: player, target, ToT, ToToT and role-sorted party frames, plus unlock mode.** The probe still
 records what the client lets addons read.
 
 ## Commands

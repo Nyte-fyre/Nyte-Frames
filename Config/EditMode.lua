@@ -10,7 +10,7 @@ NF.EditMode = EditMode
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 local LABELS = {
   player = "Player", target = "Target", targettarget = "Target of Target",
-  targettargettarget = "ToT's Target", focus = "Focus", pet = "Pet",
+  targettargettarget = "ToT's Target", focus = "Focus", pet = "Pet", party = "Party",
 }
 local MIN_W, MIN_H, MAX_W, MAX_H = 40, 12, 500, 200
 
@@ -31,13 +31,39 @@ local function centerOffset(f)
   return cx - ux, cy - uy
 end
 
+-- Each mover reads/writes its geometry through get/set: single frames use
+-- their saved center; the party mover covers the whole column and moves the
+-- group's offset / resizes its cells.
+local function geomFor(key)
+  if key == "party" then
+    return { get = NF.Party.GroupRect, set = NF.Party.SetGroupRect }
+  end
+  return {
+    get = function()
+      local c = NF.profile.frames[key]
+      local p = c.pos or {}
+      return p.x or 0, p.y or 0, c.width, c.height
+    end,
+    set = function(x, y, w, h, resized)
+      NF.Frames.SetGeometry(key, x, y, resized and w or nil, resized and h or nil)
+    end,
+  }
+end
+
 local function place(m)
+  local x, y, w, h = m.geom.get()
   local cfg = NF.profile.frames[m.key]
-  local p = cfg.pos or { x = 0, y = 0 }
   m:ClearAllPoints()
-  m:SetPoint("CENTER", UIParent, "CENTER", p.x or 0, p.y or 0)
-  m:SetSize(cfg.width, cfg.height)
+  m:SetPoint("CENTER", UIParent, "CENTER", x, y)
+  m:SetSize(w, h)
   m.text:SetText(string.format("%s\n|cffbbbbbb%d x %d|r", LABELS[m.key] or m.key, cfg.width, cfg.height))
+end
+
+local function placeAll()
+  for _, o in pairs(movers) do
+    if o:IsShown() then place(o) end
+  end
+  EditMode.RefreshPreview()
 end
 
 local function rectOf(m)
@@ -49,7 +75,9 @@ end
 local function commit(m, resized)
   local others = {}
   for _, o in pairs(movers) do
-    if o ~= m and o:IsShown() then others[#others + 1] = rectOf(o) end
+    -- the party column hangs off the player frame, so it's no snap target for it
+    local attached = (m.key == "player" and o.key == "party")
+    if o ~= m and o:IsShown() and not attached then others[#others + 1] = rectOf(o) end
   end
   local w, h = round(m:GetWidth()), round(m:GetHeight())
   local x, y = centerOffset(m)
@@ -57,8 +85,8 @@ local function commit(m, resized)
     threshold = 6, grid = layout().grid,
     snapGrid = layout().showGrid, snapElements = layout().snap,
   })
-  NF.Frames.SetGeometry(m.key, nx, ny, resized and w or nil, resized and h or nil)
-  place(m)
+  m.geom.set(nx, ny, w, h, resized)
+  placeAll()
   EditMode.UpdatePanel()
 end
 
@@ -77,6 +105,7 @@ end
 local function createMover(key)
   local m = CreateFrame("Frame", nil, UIParent)
   m.key = key
+  m.geom = geomFor(key)
   m:SetFrameStrata("DIALOG")
   m:SetMovable(true)
   m:SetResizable(true)
@@ -210,10 +239,9 @@ end
 
 local function nudge(dx, dy)
   if not selected then return end
-  local cfg = NF.profile.frames[selected.key]
-  local p = cfg.pos or { x = 0, y = 0 }
-  NF.Frames.SetGeometry(selected.key, (p.x or 0) + dx, (p.y or 0) + dy)
-  place(selected)
+  local x, y, w, h = selected.geom.get()
+  selected.geom.set(x + dx, y + dy, w, h, false)
+  placeAll()
   EditMode.UpdatePanel()
 end
 
@@ -259,15 +287,15 @@ local function buildPanel()
   panel.selected:SetWidth(120)
   panel.x = numberBox(panel, function(v)
     if selected then
-      local p = NF.profile.frames[selected.key].pos or {}
-      NF.Frames.SetGeometry(selected.key, v, p.y or 0) place(selected) EditMode.UpdatePanel()
+      local _, y, w, h = selected.geom.get()
+      selected.geom.set(v, y, w, h, false) placeAll() EditMode.UpdatePanel()
     end
   end)
   panel.x:SetPoint("TOPLEFT", 136, -60)
   panel.y = numberBox(panel, function(v)
     if selected then
-      local p = NF.profile.frames[selected.key].pos or {}
-      NF.Frames.SetGeometry(selected.key, p.x or 0, v) place(selected) EditMode.UpdatePanel()
+      local x, _, w, h = selected.geom.get()
+      selected.geom.set(x, v, w, h, false) placeAll() EditMode.UpdatePanel()
     end
   end)
   panel.y:SetPoint("LEFT", panel.x, "RIGHT", 6, 0)
@@ -282,7 +310,7 @@ local function buildPanel()
     prev = b
   end
   local reset = w.button(panel, "Reset frame", 90, function()
-    if selected then NF.Frames.ResetFrame(selected.key) place(selected) EditMode.UpdatePanel() end
+    if selected then NF.Frames.ResetFrame(selected.key) placeAll() EditMode.UpdatePanel() end
   end)
   reset:SetPoint("LEFT", prev, "RIGHT", 8, 0)
   panel.resetAll = w.button(panel, "Reset all frames", 120, function(self)
@@ -295,7 +323,7 @@ local function buildPanel()
     self.armed = false
     self.text:SetText("Reset all frames")
     for key in pairs(movers) do NF.Frames.ResetFrame(key) end
-    for _, m in pairs(movers) do place(m) end
+    placeAll()
     EditMode.UpdatePanel()
   end)
   panel.resetAll:SetPoint("TOPLEFT", 10, -86)
@@ -321,15 +349,83 @@ function EditMode.UpdatePanel()
   panel.grid:Refresh()
   panel.snap:Refresh()
   if selected then
-    local cfg = NF.profile.frames[selected.key]
-    local p = cfg.pos or { x = 0, y = 0 }
+    local x, y = selected.geom.get()
     panel.selected:SetText(LABELS[selected.key] or selected.key)
-    if not panel.x:HasFocus() then panel.x:SetText(tostring(p.x or 0)) end
-    if not panel.y:HasFocus() then panel.y:SetText(tostring(p.y or 0)) end
+    if not panel.x:HasFocus() then panel.x:SetText(tostring(round(x))) end
+    if not panel.y:HasFocus() then panel.y:SetText(tostring(round(y))) end
   else
     panel.selected:SetText("|cff888888click a frame|r")
     panel.x:SetText("")
     panel.y:SetText("")
+  end
+end
+
+---------------------------------------------------------------------------
+-- Fake party preview: shown while unlocked when you're not in a party, so the
+-- sorting and sizes are visible. Plain frames (not secure, no real units).
+---------------------------------------------------------------------------
+EditMode.FAKE_PARTY = {   -- deliberately unsorted; the preview sorts it
+  { key = "f1", name = "Ember", class = "MAGE", role = "DAMAGER" },
+  { key = "f2", name = "Lumen", class = "PRIEST", role = "HEALER" },
+  { key = "f3", name = "Vex", class = "ROGUE", role = "DAMAGER" },
+  { key = "f4", name = "Brakka", class = "WARRIOR", role = "TANK" },
+}
+local fakes = {}
+EditMode.fakes = fakes
+
+local function fakeFrame(i)
+  local f = fakes[i]
+  if f then return f end
+  f = CreateFrame("Frame", nil, UIParent)
+  f:SetFrameStrata("MEDIUM")
+  local bg = f:CreateTexture(nil, "BACKGROUND")
+  bg:SetTexture(FLAT)
+  bg:SetAllPoints()
+  bg:SetVertexColor(0, 0, 0, 1)
+  f.bar = f:CreateTexture(nil, "ARTWORK")
+  f.bar:SetTexture(FLAT)
+  f.bar:SetPoint("TOPLEFT", 1, -1)
+  f.power = f:CreateTexture(nil, "ARTWORK")
+  f.power:SetTexture(FLAT)
+  f.power:SetPoint("BOTTOMLEFT", 1, 1)
+  f.power:SetPoint("BOTTOMRIGHT", -1, 1)
+  f.power:SetVertexColor(0, 0.45, 0.95, 1)
+  f.name = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  f.name:SetPoint("TOPLEFT", 3, -3)
+  f.name:SetJustifyH("LEFT")
+  f.value = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  f.value:SetPoint("BOTTOMRIGHT", -3, 3)
+  f.role = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  f.role:SetPoint("TOPRIGHT", -3, -3)
+  fakes[i] = f
+  return f
+end
+
+function EditMode.RefreshPreview()
+  local show = EditMode.active and NF.profile.frames.party.enabled and not NF.Party.Active()
+  if not show then
+    for _, f in ipairs(fakes) do f:Hide() end
+    return
+  end
+  local c = NF.profile.frames.party
+  local placed = NF.Sorting.Place(NF.Sorting.PartyColumns(EditMode.FAKE_PARTY), 1)
+  local pct = math.max(0, math.min(60, c.powerHeightPct or 0))
+  for i, e in ipairs(placed) do
+    local f = fakeFrame(i)
+    local x, y = NF.Party.CellCenter(e.colFromRight, e.rowFromBottom)
+    f:ClearAllPoints()
+    f:SetPoint("CENTER", UIParent, "CENTER", x, y)
+    f:SetSize(c.width, c.height)
+    local powerH = (pct > 0) and math.max(1, math.floor((c.height - 2) * pct / 100 + 0.5)) or 0
+    f.power:SetHeight(math.max(1, powerH))
+    f.power:SetShown(powerH > 0)
+    f.bar:SetPoint("BOTTOMRIGHT", -1, 1 + powerH + (powerH > 0 and 1 or 0))
+    f.bar:SetVertexColor(NF.Compat.ClassColor(e.member.class))
+    f.name:SetText(e.member.name)
+    f.name:SetWidth(math.max(10, c.width - 20))
+    f.value:SetText((c.textMode or NF.profile.general.textMode) == "number" and "12.3k" or "100%")
+    f.role:SetText(NF.UnitButton.ROLE_LETTER[e.member.role] or "")
+    f:Show()
   end
 end
 
@@ -342,12 +438,15 @@ function EditMode.Unlock()
     return
   end
   if not panel then buildPanel() end
-  for key in pairs(NF.Frames.byKey) do
+  local keys = {}
+  for key in pairs(NF.Frames.byKey) do keys[#keys + 1] = key end
+  if NF.profile.frames.party.enabled then keys[#keys + 1] = "party" end
+  for _, key in ipairs(keys) do
     movers[key] = movers[key] or createMover(key)
-    place(movers[key])
     movers[key]:Show()
   end
   EditMode.active = true
+  placeAll()
   selectMover(selected or movers.player)
   panel:Show()
   updateGrid()
@@ -361,6 +460,7 @@ function EditMode.Lock()
   end
   if panel then panel:Hide() end
   updateGrid()
+  EditMode.RefreshPreview()
 end
 
 function EditMode.Toggle()

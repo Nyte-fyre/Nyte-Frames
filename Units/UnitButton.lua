@@ -115,9 +115,15 @@ local function edge(parent, layer)
   return t
 end
 
-function UB.Create(key, unit)
-  local b = CreateFrame("Button", "NyteFrames_" .. key, UIParent, "SecureUnitButtonTemplate")
+UB.UNIT_EVENTS = { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER",
+  "UNIT_DISPLAYPOWER", "UNIT_NAME_UPDATE", "UNIT_CONNECTION", "UNIT_FLAGS", "UNIT_FACTION" }
+
+-- key = settings key ("party"); globalName defaults to NyteFrames_<key>
+function UB.Create(key, unit, globalName)
+  local b = CreateFrame("Button", globalName or ("NyteFrames_" .. key), UIParent, "SecureUnitButtonTemplate")
   b.key, b.unit = key, unit
+  b.compact = (key == "party" or key == "raid")
+  b.oocKey = "size:" .. (globalName or key) -- unique per button for the combat queue
   b:SetAttribute("unit", unit)
   b:SetAttribute("*type1", "target")
   b:SetAttribute("*type2", "togglemenu")
@@ -172,10 +178,17 @@ function UB.Create(key, unit)
   b:SetScript("OnShow", function(self) UB.UpdateAll(self) end)
   b:SetScript("OnEvent", UB.OnEvent)
 
-  for _, e in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER",
-      "UNIT_DISPLAYPOWER", "UNIT_NAME_UPDATE", "UNIT_CONNECTION", "UNIT_FLAGS", "UNIT_FACTION" }) do
+  for _, e in ipairs(UB.UNIT_EVENTS) do
     pcall(b.RegisterUnitEvent, b, e, unit)
   end
+
+  -- role icon (party/raid): atlas if the client has it, else a letter
+  b.roleIcon = b.textLayer:CreateTexture(nil, "OVERLAY")
+  b.roleIcon:SetSize(12, 12)
+  b.roleIcon:Hide()
+  b.roleText = b.textLayer:CreateFontString(nil, "OVERLAY")
+  b.roleText:SetShadowOffset(1, -1)
+  b.roleText:Hide()
 
   -- Clique-style click casting
   ClickCastFrames = ClickCastFrames or {}
@@ -188,6 +201,36 @@ end
 ---------------------------------------------------------------------------
 -- Layout (size, split, fonts, texture). Secure parts only out of combat.
 ---------------------------------------------------------------------------
+
+-- Point a pooled button at another unit (party/raid). Out of combat only.
+function UB.SetUnit(b, unit)
+  if b.unit == unit then return end
+  b:SetAttribute("unit", unit)
+  b.unit = unit
+  for _, e in ipairs(UB.UNIT_EVENTS) do
+    pcall(b.UnregisterEvent, b, e)
+    pcall(b.RegisterUnitEvent, b, e, unit)
+  end
+end
+
+local ROLE_ATLAS = { TANK = "roleicon-tiny-tank", HEALER = "roleicon-tiny-healer", DAMAGER = "roleicon-tiny-dps" }
+local ROLE_LETTER = { TANK = "|cff6fa8ffT|r", HEALER = "|cff6fff8fH|r", DAMAGER = "|cffff7070D|r" }
+UB.ROLE_LETTER = ROLE_LETTER
+
+function UB.SetRole(b, role)
+  b.role = role
+  local cfg = cfgOf(b)
+  local show = role and cfg.icons and cfg.icons.role
+  b.roleIcon:Hide()
+  b.roleText:Hide()
+  if not show then return end
+  if ROLE_ATLAS[role] and pcall(b.roleIcon.SetAtlas, b.roleIcon, ROLE_ATLAS[role]) and b.roleIcon:GetAtlas() then
+    b.roleIcon:Show()
+  else
+    b.roleText:SetText(ROLE_LETTER[role] or "")
+    b.roleText:Show()
+  end
+end
 function UB.Layout(b)
   local cfg, g = cfgOf(b), general()
   local w, h = cfg.width, cfg.height
@@ -195,7 +238,7 @@ function UB.Layout(b)
   local tex = NF.Media.Texture(g.texture)
   local font = NF.Media.Font(g.font)
 
-  NF.RunOOC("size:" .. b.key, function()
+  NF.RunOOC(b.oocKey, function()
     b:SetSize(w, h)
     UB.Place(b)
   end)
@@ -224,6 +267,28 @@ function UB.Layout(b)
   b.healthText:SetFont(font, size, "")
   b.powerText:SetFont(font, math.max(8, size - 2), "")
 
+  b.roleIcon:ClearAllPoints()
+  b.roleIcon:SetPoint("TOPRIGHT", b.health, "TOPRIGHT", -2, -2)
+  b.roleText:SetFont(font, math.max(8, size - 2), "")
+  b.roleText:ClearAllPoints()
+  b.roleText:SetPoint("TOPRIGHT", b.health, "TOPRIGHT", -3, -2)
+
+  if b.compact then
+    -- small group frames: name on top, value text under it
+    b.nameText:ClearAllPoints()
+    b.nameText:SetPoint("TOPLEFT", b.health, "TOPLEFT", 3, -3)
+    b.nameText:SetWidth(math.max(10, w - 20))
+    b.healthText:ClearAllPoints()
+    b.healthText:SetPoint("BOTTOMRIGHT", b.health, "BOTTOMRIGHT", -3, 3)
+    b.healthText:SetWidth(math.max(10, w - 8))
+    b.nameText:SetShown(cfg.showName)
+    b.healthText:SetShown(cfg.showHealthText)
+    b.powerText:Hide()
+    UB.SetRole(b, b.role)
+    UB.UpdateAll(b)
+    return
+  end
+
   -- name gets the space the value text doesn't need
   local reserve = (b.key == "player") and math.floor(w * 0.45) or math.floor(w * 0.32)
   b.healthText:ClearAllPoints()
@@ -244,6 +309,7 @@ end
 
 -- Position: saved pos, else the reference layout scaled to this screen.
 function UB.Place(b)
+  if b.placeFn then return b.placeFn(b) end
   local cfg = cfgOf(b)
   b:ClearAllPoints()
   local p = cfg.pos

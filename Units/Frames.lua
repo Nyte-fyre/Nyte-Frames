@@ -69,6 +69,7 @@ function Frames.Spawn()
     Frames.Calibrate()
     for _, def in ipairs(Frames.SINGLE) do spawn(def) end
     Frames.UpdateAll()
+    NF.Party.Apply()
   end)
 end
 
@@ -94,12 +95,16 @@ end
 
 -- Re-apply layout after a settings change (size parts wait for combat end).
 function Frames.Refresh(key)
+  if key == "party" then NF.Party.Refresh() return end
   if key then
     local b = Frames.byKey[key]
     if b then UB.Layout(b) end
+    -- the party column hangs off the player frame
+    if key == "player" then NF.Party.Refresh() end
     return
   end
   for _, b in pairs(Frames.byKey) do UB.Layout(b) end
+  NF.Party.Refresh()
 end
 
 function Frames.UpdateAll()

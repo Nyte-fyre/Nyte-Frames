@@ -65,6 +65,7 @@ function FrameMethods.GetCenter(self)
   return 512, 384
 end
 function FrameMethods.HasFocus() return false end
+function FrameMethods.GetName(self) return self._name end
 function FrameMethods.GetThumbTexture(self) self._thumb = self._thumb or CreateFrame("Texture") return self._thumb end
 function FrameMethods.Show(self) self._shown = true if self._scripts.OnShow then self._scripts.OnShow(self) end end
 function FrameMethods.Hide(self) self._shown = false end
@@ -86,7 +87,7 @@ function CreateFrame(kind, name, parent, template)
   local o = newObject(kind)
   for k, v in pairs(FrameMethods) do o[k] = v end
   frames[#frames + 1] = o
-  if name then _G[name] = o end
+  if name then _G[name] = o o._name = name end
   return o
 end
 
@@ -136,6 +137,7 @@ tinsert = table.insert
 unpack = unpack or table.unpack
 watched = {}
 function RegisterUnitWatch(f) watched[f] = true end
+function UnregisterUnitWatch(f) watched[f] = nil end
 StaticPopupDialogs = {}
 function StaticPopup_Show(name) lastPopup = name end
 function ReloadUI() end
@@ -154,12 +156,13 @@ function GetTime() return 1000 + os.clock() end
 time = os.time
 date = os.date
 function GetRealmName() return "Realm" end
-function GetUnitName(u) return u == "player" and "Nyte Fyre" or nil end
-local units = { player = true, target = true, party1 = true, targettarget = true, targettargettarget = true }
+local NAMES = { player = "Nyte Fyre", party1 = "Zed Pal", party2 = "Amy Priest" }
+function GetUnitName(u) return NAMES[u] end
+units = { player = true, target = true, party1 = true, party2 = true, targettarget = true, targettargettarget = true }
 function UnitExists(u) return units[u] or false end
 function UnitName(u) if units[u] then return u == "target" and secret("Mob") or "Nyte", "Fyre" end end
 function UnitGUID(u) return units[u] and ("Player-1-" .. u) or nil end
-function UnitClass(u) if units[u] then return "Paladin", "PALADIN" end end
+function UnitClass(u) if units[u] then if u == "party2" then return "Priest", "PRIEST" end return "Paladin", "PALADIN" end end
 targetIsNPC = true
 function UnitIsPlayer(u) return not (u == "target" and targetIsNPC) end
 function UnitLevel(u) return u == "target" and -1 or 60 end
@@ -189,7 +192,8 @@ function InCombatLockdown() return inCombat end
 function IsInInstance() return false, "none" end
 function GetInstanceInfo() return "Elwynn", "none", 0 end
 function IsInRaid() return false end
-function IsInGroup() return true end
+inGroup = true
+function IsInGroup() return inGroup end
 function GetNumGroupMembers() return 2 end
 function CanInspect() return true end
 function NotifyInspect() end
@@ -347,6 +351,29 @@ check(tt.healthText._text ~= nil, "UNIT_TARGET on target refreshes ToT")
 fire("UNIT_TARGET", secret("target"))
 check(TargetFrameToT._parent == ns.Blizzard.hiddenParent, "Blizzard ToT hidden")
 
+-- M5: party frames, sorted, above the player frame
+local p1, p2, p3, p4 = _G.NyteFrames_Party1, _G.NyteFrames_Party2, _G.NyteFrames_Party3, _G.NyteFrames_Party4
+check(p1 and p4, "party pool of 4 created")
+check(p1.unit == "party2" and p1.role == "HEALER", "priest (healer) sorted first: " .. tostring(p1.unit))
+check(p2.unit == "party1" and p2.role == "DAMAGER", "paladin with no role = DPS second")
+check(watched[p1] and watched[p2] and not watched[p3] and not watched[p4], "only filled slots are watched")
+check(p1._point.y > p2._point.y, "first member sits on top")
+local pc, pl = ns.profile.frames.party, ns.profile.frames.player
+check(math.abs((p2._point.x + pc.width / 2) - (pl.pos.x + pl.width / 2)) < 0.01, "column right edge = player right edge " .. p2._point.x .. " " .. pc.width .. " " .. pl.pos.x .. " " .. pl.width .. " " .. tostring(pc.offset.x))
+check(math.abs((p2._point.y - pc.height / 2) - (pl.pos.y + pl.height / 2 + pc.spacing)) < 0.01, "column bottom sits on the player frame")
+-- manual override flips the order
+ns.profile.roleOverrides["Zed Pal"] = "TANK"
+fire("GROUP_ROSTER_UPDATE")
+check(p1.unit == "party1" and p1.role == "TANK", "override: tank first")
+-- roster change in combat is queued
+inCombat = true
+ns.profile.roleOverrides["Zed Pal"] = nil
+fire("GROUP_ROSTER_UPDATE")
+check(p1.unit == "party1", "no re-sort in combat")
+inCombat = false
+fire("PLAYER_REGEN_ENABLED")
+check(p1.unit == "party2", "re-sorted after combat")
+
 -- M4: unlock mode
 inCombat = true
 SlashCmdList.NYTEFRAMES("unlock")
@@ -367,7 +394,7 @@ m._w, m._h = 150.2, 40
 m.grip._scripts.OnMouseUp(m.grip)
 check(ns.profile.frames.player.width == 150 and ns.profile.frames.player.height == 40, "corner resize saved")
 NyteFramesUnlockPanel._scripts.OnKeyDown(NyteFramesUnlockPanel, "LEFT")
-check(ns.profile.frames.player.pos.x == -401, "arrow nudges 1px")
+check(ns.profile.frames.player.pos.x == -401, "arrow nudges 1px: " .. ns.profile.frames.player.pos.x)
 NyteFramesUnlockPanel._scripts.OnKeyDown(NyteFramesUnlockPanel, "UP")
 check(ns.profile.frames.player.pos.y == 101, "arrow up nudges")
 -- snap a ToT onto the target's left edge
@@ -383,6 +410,24 @@ ns.EditMode.Lock() ns.EditMode.Unlock()
 check(ns.EditMode.active, "grid on, unlocked again")
 fire("PLAYER_REGEN_DISABLED")
 check(not ns.EditMode.active and not mv.player._shown, "combat locks")
+inCombat = false
+-- fake party preview when not grouped
+check(mv.party ~= nil, "party mover exists")
+inGroup = false
+fire("GROUP_ROSTER_UPDATE")
+ns.EditMode.Unlock()
+local fk = ns.EditMode.fakes
+check(#fk == 4 and fk[1]._shown and fk[1].name._text == "Brakka" and fk[2].name._text == "Lumen", "fake preview sorted T,H,D,D")
+check(not watched[p1] and not watched[p2], "real party buttons released when solo")
+-- dragging the party mover moves the group offset
+local pm = mv.party
+local before = ns.profile.frames.party.offset.x
+pm._point.x = pm._point.x - 200
+pm._scripts.OnDragStop(pm)
+check(ns.profile.frames.party.offset.x <= before - 190, "party drag sets offset: " .. ns.profile.frames.party.offset.x)
+ns.EditMode.Lock()
+check(not fk[1]._shown, "preview hidden on lock")
+inGroup = true
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 

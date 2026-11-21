@@ -15,6 +15,7 @@ Settings.PAGES = {
   { key = "target", label = "Target" },
   { key = "targettarget", label = "ToT" },
   { key = "targettargettarget", label = "ToToT" },
+  { key = "party", label = "Party" },
 }
 
 local function label(parent, text, size)
@@ -170,8 +171,8 @@ local function build()
   -- page tabs
   local tabs = {}
   for i, page in ipairs(Settings.PAGES) do
-    local t = button(window, page.label, 90, function() Settings.Show(page.key) end)
-    t:SetPoint("TOPLEFT", 14 + (i - 1) * 94, y - 66)
+    local t = button(window, page.label, 74, function() Settings.Show(page.key) end)
+    t:SetPoint("TOPLEFT", 14 + (i - 1) * 78, y - 66)
     t.key = page.key
     tabs[i] = t
   end
