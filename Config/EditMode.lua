@@ -10,7 +10,7 @@ NF.EditMode = EditMode
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 local LABELS = {
   player = "Player", target = "Target", targettarget = "Target of Target",
-  targettargettarget = "ToT's Target", focus = "Focus", pet = "Pet", party = "Party",
+  targettargettarget = "ToT's Target", focus = "Focus", pet = "Pet", party = "Party", raid = "Raid (25-player block)",
 }
 local MIN_W, MIN_H, MAX_W, MAX_H = 40, 12, 500, 200
 
@@ -37,6 +37,9 @@ end
 local function geomFor(key)
   if key == "party" then
     return { get = NF.Party.GroupRect, set = NF.Party.SetGroupRect }
+  end
+  if key == "raid" then
+    return { get = NF.Raid.GroupRect, set = NF.Raid.SetGroupRect }
   end
   return {
     get = function()
@@ -76,7 +79,7 @@ local function commit(m, resized)
   local others = {}
   for _, o in pairs(movers) do
     -- the party column hangs off the player frame, so it's no snap target for it
-    local attached = (m.key == "player" and o.key == "party")
+    local attached = (m.key == "player" and (o.key == "party" or o.key == "raid"))
     if o ~= m and o:IsShown() and not attached then others[#others + 1] = rectOf(o) end
   end
   local w, h = round(m:GetWidth()), round(m:GetHeight())
@@ -327,6 +330,12 @@ local function buildPanel()
     EditMode.UpdatePanel()
   end)
   panel.resetAll:SetPoint("TOPLEFT", 10, -86)
+  panel.preview = w.button(panel, "", 150, function(self)
+    EditMode.previewMode = (EditMode.previewMode == "raid") and "party" or "raid"
+    if selected and (selected.key == "party" or selected.key == "raid") then selected = nil end
+    EditMode.Unlock()
+  end)
+  panel.preview:SetPoint("LEFT", panel.resetAll, "RIGHT", 8, 0)
 
   -- arrow keys nudge the selected frame; Escape locks; other keys pass through
   panel:EnableKeyboard(true)
@@ -346,6 +355,7 @@ end
 function EditMode.UpdatePanel()
   if not panel then return end
   panel.gridSize:SetText(tostring(layout().grid or 16))
+  panel.preview.text:SetText("Showing: " .. ((EditMode.previewMode == "raid") and "Raid" or "Party"))
   panel.grid:Refresh()
   panel.snap:Refresh()
   if selected then
@@ -401,18 +411,49 @@ local function fakeFrame(i)
   return f
 end
 
-function EditMode.RefreshPreview()
-  local show = EditMode.active and NF.profile.frames.party.enabled and not NF.Party.Active()
-  if not show then
-    for _, f in ipairs(fakes) do f:Hide() end
-    return
+-- A 25-player fake raid: the player's group (1) plus 20 others with a mix of
+-- roles, deliberately unsorted. Built once.
+local fakeRaid
+local function FakeRaid()
+  if fakeRaid then return fakeRaid end
+  local classes = { "WARRIOR", "MAGE", "PRIEST", "ROGUE", "DRUID", "HUNTER", "WARLOCK", "SHAMAN", "PALADIN" }
+  local roles = { "DAMAGER", "DAMAGER", "HEALER", "DAMAGER", "TANK" }
+  fakeRaid = { { key = "me", name = "You", class = "PALADIN", subgroup = 1, isPlayer = true } }
+  for i = 1, 24 do
+    local cls = classes[(i * 7) % #classes + 1]
+    local role = roles[(i * 3) % #roles + 1]
+    if cls == "MAGE" or cls == "ROGUE" or cls == "HUNTER" or cls == "WARLOCK" then role = "DAMAGER" end
+    if cls == "PRIEST" and role == "TANK" then role = "HEALER" end
+    fakeRaid[#fakeRaid + 1] = { key = "r" .. i, name = "Raider" .. i, class = cls, role = role,
+      subgroup = math.floor((i) / 5) + 1 }
   end
-  local c = NF.profile.frames.party
-  local placed = NF.Sorting.Place(NF.Sorting.PartyColumns(EditMode.FAKE_PARTY), 1)
+  return fakeRaid
+end
+EditMode.FakeRaid = FakeRaid
+
+function EditMode.DefaultPreviewMode()
+  return IsInRaid() and "raid" or "party"
+end
+
+function EditMode.RefreshPreview()
+  local mode = EditMode.previewMode or "party"
+  local frames = NF.profile.frames
+  local c, placed
+  if EditMode.active and mode == "party" and frames.party.enabled and not NF.Party.Active() then
+    c = frames.party
+    placed = NF.Sorting.Place(NF.Sorting.PartyColumns(EditMode.FAKE_PARTY), 1)
+  elseif EditMode.active and mode == "raid" and frames.raid.enabled and not NF.Raid.Active() then
+    c = frames.raid
+    placed = NF.Sorting.Place(NF.Sorting.RaidColumns(FakeRaid(), 1, 5), c.maxColumnsPerRow or 8, 5)
+  end
+  placed = placed or {}
+  for i = #placed + 1, #fakes do fakes[i]:Hide() end
+  if not c then return end
   local pct = math.max(0, math.min(60, c.powerHeightPct or 0))
+  local textMode = c.textMode or NF.profile.general.textMode
   for i, e in ipairs(placed) do
     local f = fakeFrame(i)
-    local x, y = NF.Party.CellCenter(e.colFromRight, e.rowFromBottom)
+    local x, y = NF.GroupLayout.CellCenter(c, e.colFromRight, e.rowFromBottom)
     f:ClearAllPoints()
     f:SetPoint("CENTER", UIParent, "CENTER", x, y)
     f:SetSize(c.width, c.height)
@@ -423,8 +464,7 @@ function EditMode.RefreshPreview()
     f.bar:SetVertexColor(NF.Compat.ClassColor(e.member.class))
     f.name:SetText(e.member.name)
     f.name:SetWidth(math.max(10, c.width - 20))
-    local mode = c.textMode or NF.profile.general.textMode
-    f.value:SetText(mode == "number" and "12.3k" or (mode == "both" and "12.3k | 100%" or "100%"))
+    f.value:SetText(textMode == "number" and "12.3k" or (textMode == "both" and "12.3k | 100%" or "100%"))
     f.role:SetText(NF.UnitButton.ROLE_LETTER[e.member.role] or "")
     f:Show()
   end
@@ -441,7 +481,11 @@ function EditMode.Unlock()
   if not panel then buildPanel() end
   local keys = {}
   for key in pairs(NF.Frames.byKey) do keys[#keys + 1] = key end
-  if NF.profile.frames.party.enabled then keys[#keys + 1] = "party" end
+  EditMode.previewMode = EditMode.previewMode or EditMode.DefaultPreviewMode()
+  for _, m in pairs(movers) do m:Hide() end
+  -- party and raid sit in the same spot: one at a time, switched on the panel
+  local group = EditMode.previewMode
+  if NF.profile.frames[group].enabled then keys[#keys + 1] = group end
   for _, key in ipairs(keys) do
     movers[key] = movers[key] or createMover(key)
     movers[key]:Show()
@@ -455,6 +499,7 @@ end
 
 function EditMode.Lock()
   EditMode.active = false
+  EditMode.previewMode = nil -- next unlock picks party/raid from your group
   for _, m in pairs(movers) do
     m:StopMovingOrSizing()
     m:Hide()

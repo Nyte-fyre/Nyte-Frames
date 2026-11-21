@@ -1,7 +1,7 @@
 -- Init.lua: namespace, event bus, slash commands.
 local ADDON, NF = ...
 NF.ADDON = ADDON
-NF.VERSION = "0.5.0"
+NF.VERSION = "0.6.0"
 _G.NyteFrames = NF -- for /dump and other addons; nothing secure reads it
 
 local PREFIX = "|cff8a7dffNyte Frames|r: "
@@ -77,6 +77,7 @@ end)
 NF.On("PLAYER_LOGIN", function()
   NF.Compat.Run()
   NF.Probe.Start()
+  NF.Roles.Init()
   NF.Frames.Spawn()
   NF.Blizzard.Apply()
 end)
@@ -91,6 +92,7 @@ commands.help = function()
   NF.Print("v" .. NF.VERSION .. " commands:")
   print("  /nf                  - open settings")
   print("  /nf unlock | lock    - move and resize frames")
+  print("  /nf role [name] tank|healer|dps|auto - set a role (Shift+right-click a frame too)")
   print("  /nf probe            - probe status (it records automatically)")
   print("  /nf probe now        - take an out-of-combat snapshot now")
   print("  /nf probe inspect    - inspect your target's talents (role detection test)")
@@ -103,6 +105,7 @@ end
 
 commands.config = function() NF.Settings.Toggle() end
 commands.unlock = function() NF.EditMode.Unlock() end
+commands.role = function(rest) NF.RoleMenu.Command(rest) end
 commands.lock = function() NF.EditMode.Lock() end
 commands.settings = commands.config
 

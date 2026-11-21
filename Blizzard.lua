@@ -16,6 +16,7 @@ Blizzard.MAP = {
   target = { "TargetFrame" },
   targettarget = { "TargetFrameToT" },
   party = { "PartyFrame", "CompactPartyFrame" },
+  raid = { "CompactRaidFrameContainer", "CompactRaidFrameManager" },
   -- targettargettarget: Blizzard has no frame for it
 }
 

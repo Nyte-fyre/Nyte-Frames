@@ -3,13 +3,14 @@
 Flat, resizable unit frames for **WoW: Forever**. Party and raid frames sit above
 your player frame, sorted tank, healer, DPS, and grow to the left as groups are added.
 
-**Status: v0.5.0, milestone 5: player, target, ToT, ToToT and role-sorted party frames, plus unlock mode.** The probe still
+**Status: v0.6.0, milestone 6: player, target, ToT, ToToT, role-sorted party and raid frames, unlock mode.** The probe still
 records what the client lets addons read.
 
 ## Commands
 
 - `/nf` or `/nyteframes` - settings (`/nf help` for commands)
 - `/nf unlock` / `/nf lock` - drag, resize (corner), grid, snap, arrow-key nudge
+- `/nf role [name] tank|healer|dps|auto` - set a role (or Shift+right-click a party/raid frame)
 - `/nf probe` - probe status (it records by itself)
 - `/nf probe now` - take a snapshot now
 - `/nf probe inspect` - test talent inspection on your target

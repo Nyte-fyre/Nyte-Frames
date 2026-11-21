@@ -10,7 +10,7 @@ import sys
 from lupa.lua51 import LuaRuntime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SPECS = ["tests/sorting_spec.lua", "tests/snap_spec.lua", "tests/load_spec.lua"]
+SPECS = ["tests/sorting_spec.lua", "tests/snap_spec.lua", "tests/roles_spec.lua", "tests/load_spec.lua"]
 
 
 def main():

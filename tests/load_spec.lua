@@ -134,6 +134,7 @@ TargetFrame = CreateFrame("Frame", "TargetFrame")
 TargetFrameToT = CreateFrame("Frame", "TargetFrameToT")
 UISpecialFrames = {}
 tinsert = table.insert
+function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 unpack = unpack or table.unpack
 watched = {}
 function RegisterUnitWatch(f) watched[f] = true end
@@ -162,7 +163,8 @@ units = { player = true, target = true, party1 = true, party2 = true, targettarg
 function UnitExists(u) return units[u] or false end
 function UnitName(u) if units[u] then return u == "target" and secret("Mob") or "Nyte", "Fyre" end end
 function UnitGUID(u) return units[u] and ("Player-1-" .. u) or nil end
-function UnitClass(u) if units[u] then if u == "party2" then return "Priest", "PRIEST" end return "Paladin", "PALADIN" end end
+CLASSES = { party2 = "PRIEST" }
+function UnitClass(u) if units[u] then local c = CLASSES[u] or "PALADIN" return c, c end end
 targetIsNPC = true
 function UnitIsPlayer(u) return not (u == "target" and targetIsNPC) end
 function UnitLevel(u) return u == "target" and -1 or 60 end
@@ -177,8 +179,10 @@ function UnitIsDeadOrGhost() return false end
 function UnitIsConnected() return true end
 function UnitReaction() return 2 end
 function UnitCanAttack(_, u) return u == "target" end
-function UnitIsUnit(a, b) return a == b end
-function UnitGroupRolesAssigned() return "DAMAGER" end
+RAID_PLAYER = nil
+function UnitIsUnit(a, b) if b == "player" and a == RAID_PLAYER then return true end return a == b end
+ROLES = {}
+function UnitGroupRolesAssigned(u) return ROLES[u] or "DAMAGER" end
 function UnitInRange() return secret(true), true end
 function UnitThreatSituation() return nil end
 function UnitGetIncomingHeals() return secret(0) end
@@ -191,12 +195,15 @@ function AbbreviateNumbers(v) return v end
 function InCombatLockdown() return inCombat end
 function IsInInstance() return false, "none" end
 function GetInstanceInfo() return "Elwynn", "none", 0 end
-function IsInRaid() return false end
+inRaid = false
+function IsInRaid() return inRaid end
 inGroup = true
 function IsInGroup() return inGroup end
-function GetNumGroupMembers() return 2 end
+groupSize = 2
+function GetNumGroupMembers() return groupSize end
 function CanInspect() return true end
-function NotifyInspect() end
+inspected = {}
+function NotifyInspect(u) inspected[#inspected + 1] = u end
 function IsEncounterInProgress() return false end
 C_UnitAuras = {
   GetAuraDataByIndex = function(u, i, f)
@@ -428,6 +435,96 @@ check(ns.profile.frames.party.offset.x <= before - 190, "party drag sets offset:
 ns.EditMode.Lock()
 check(not fk[1]._shown, "preview hidden on lock")
 inGroup = true
+
+-- M6: raid frames, worked example, roles chain
+local RAIDROSTER = {}
+function GetRaidRosterInfo(i) local r = RAIDROSTER[i] if r then return r.name, 0, r.sub, 60, r.class, r.class, "", true, false, r.flag end end
+local function addRaider(i, name, class, role, sub, flag)
+  local u = "raid" .. i
+  units[u] = true NAMES[u] = name CLASSES[u] = class ROLES[u] = role
+  RAIDROSTER[i] = { name = name, class = class, sub = sub, flag = flag }
+end
+-- player's group: me + tank, healer, 2 dps
+addRaider(1, "Nyte Fyre", "PALADIN", "HEALER", 1) RAID_PLAYER = "raid1"
+addRaider(2, "OwnTank", "WARRIOR", "TANK", 1)
+addRaider(3, "OwnHeal", "PRIEST", "HEALER", 1)
+addRaider(4, "OwnMage", "MAGE", "DAMAGER", 1)
+addRaider(5, "OwnRogue", "ROGUE", "DAMAGER", 1)
+-- the rest: 3 tanks (one only via the MAINTANK flag), 4 healers, 7 dps
+local n = 5
+local function add(name, class, role, flag) n = n + 1 addRaider(n, name, class, role, 2 + (n % 3), flag) end
+add("T1", "WARRIOR", "TANK") add("T2", "DRUID", "TANK") add("T3", "WARRIOR", "DAMAGER", "MAINTANK")
+add("H1", "PRIEST", "HEALER") add("H2", "SHAMAN", "HEALER") add("H3", "DRUID", "HEALER") add("H4", "PALADIN", "HEALER")
+for i = 1, 7 do add("D" .. i, (i % 2 == 0) and "MAGE" or "WARLOCK", "DAMAGER") end
+inRaid, groupSize = true, n
+fire("GROUP_ROSTER_UPDATE")
+runTimers()
+local cols = {}
+for b, e in pairs(ns.Raid.placed) do
+  if e then
+    cols[e.column] = cols[e.column] or {}
+    cols[e.column][e.slot] = (e.member.role or "?"):sub(1, 1)
+    check(not e.member.isPlayer, "player never in a raid column")
+    check(watched[b], "placed raid button is watched")
+  end
+end
+local function colStr(c) return table.concat(cols[c] or {}) end
+check(colStr(1) == "THDD", "raid col 1 = own group: " .. colStr(1))
+check(colStr(2) == "TTTHH", "raid col 2: " .. colStr(2))
+check(colStr(3) == "HHDDD", "raid col 3: " .. colStr(3))
+check(colStr(4) == "DDDD", "raid col 4: " .. colStr(4))
+check(not watched[_G.NyteFrames_Party1], "party frames off in a raid")
+-- columns step left from the player frame
+local r1 = ns.Raid.buttons[1]
+local own = {}
+for b, e in pairs(ns.Raid.placed) do if e then own[e.column] = own[e.column] or b end end
+check(own[2]._point.x < own[1]._point.x and own[3]._point.x < own[2]._point.x, "columns grow left")
+-- wrapping: 2 columns per row puts column 3 above column 1
+ns.profile.frames.raid.maxColumnsPerRow = 2
+ns.Raid.Apply()
+local c3
+for b, e in pairs(ns.Raid.placed) do if e and e.column == 3 and e.slot == 1 then c3 = e end end
+check(c3 and c3.band == 2 and c3.colFromRight == 0, "column 3 wraps above")
+ns.profile.frames.raid.maxColumnsPerRow = 8
+-- talents via inspect: an unassigned warrior with 31 points in Protection becomes a tank
+add("Inspectme", "WARRIOR", "DAMAGER")
+groupSize = n
+local realNodes = C_Traits.GetNodeInfo
+C_Traits.GetNodeInfo = function(_, id) return { ranksPurchased = (id == 2) and 31 or 0, posX = id * 4500 } end
+inspected = {}
+ns.Roles.INSPECT_GAP = 0
+ns.Raid.Apply()
+for _ = 1, 40 do
+  ns.Roles.Pump()
+  local p = ns.Roles.Pending()
+  if not p then break end
+  fire("INSPECT_READY", p.guid)
+end
+C_Traits.GetNodeInfo = realNodes
+local found
+for _, u in ipairs(inspected) do if NAMES[u] == "Inspectme" then found = u end end
+check(found ~= nil, "unknown-role warrior gets inspected")
+check(found and NyteFramesDB.roleCache[UnitGUID(found)].role == "TANK", "inspect result (31 Prot) cached by GUID as TANK")
+check(#inspected > 0 and not (function() for _, u in ipairs(inspected) do if CLASSES[u] == "MAGE" then return true end end end)(), "pure DPS classes are never inspected")
+-- manual override via /nf role
+SlashCmdList.NYTEFRAMES("role D1 tank")
+check(ns.profile.roleOverrides.D1 == "TANK", "/nf role sets override")
+SlashCmdList.NYTEFRAMES("role D1 auto")
+check(ns.profile.roleOverrides.D1 == nil, "/nf role auto clears it")
+check(_G.NyteFrames_Raid1._attr["shift-type2"] == "nfRoleMenu", "shift-right-click opens the role menu")
+-- in a raid, unlock previews the raid block
+ns.EditMode.Unlock()
+check(ns.EditMode.previewMode == "raid" and ns.EditMode.movers.raid and ns.EditMode.movers.raid._shown, "raid mover in a raid")
+check(not (ns.EditMode.movers.party and ns.EditMode.movers.party._shown), "party mover hidden in raid mode")
+ns.EditMode.Lock()
+inRaid = false
+ns.EditMode.Unlock()
+check(ns.EditMode.previewMode == "party", "solo unlock previews party")
+NyteFramesUnlockPanel.preview._scripts.OnClick(NyteFramesUnlockPanel.preview)
+local shown = 0
+for _, f in ipairs(ns.EditMode.fakes) do if f._shown then shown = shown + 1 end end
+check(ns.EditMode.previewMode == "raid" and shown == 24, "fake raid preview shows 24 others: " .. shown)
+ns.EditMode.Lock()
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 

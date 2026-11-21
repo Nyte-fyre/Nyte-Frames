@@ -21,49 +21,18 @@ local function cfg() return NF.profile.frames.party end
 ---------------------------------------------------------------------------
 -- Geometry: offsets from the screen center (same space as saved positions)
 ---------------------------------------------------------------------------
--- Bottom-right corner of the group: the player frame's top-right + spacing,
--- shifted by the group's own offset.
-function Party.Anchor()
-  local p = NF.profile.frames.player
-  local pos = p.pos or { x = 0, y = 0 }
-  local c = cfg()
-  local sp = c.spacing or 2
-  return (pos.x or 0) + p.width / 2 + (c.offset.x or 0),
-         (pos.y or 0) + p.height / 2 + sp + (c.offset.y or 0)
-end
+function Party.Anchor() return NF.GroupLayout.Anchor(cfg()) end
 
--- Center of a cell, by column (0 = right-most) and row (0 = bottom).
 function Party.CellCenter(colFromRight, rowFromBottom)
-  local c = cfg()
-  local sp = c.spacing or 2
-  local ax, ay = Party.Anchor()
-  return ax - colFromRight * (c.width + sp) - c.width / 2,
-         ay + rowFromBottom * (c.height + sp) + c.height / 2
+  return NF.GroupLayout.CellCenter(cfg(), colFromRight, rowFromBottom)
 end
 
 -- Rectangle covering a full column (used by unlock mode): cx, cy, w, h
-function Party.GroupRect()
-  local c = cfg()
-  local sp = c.spacing or 2
-  local ax, ay = Party.Anchor()
-  local h = Party.SIZE * c.height + (Party.SIZE - 1) * sp
-  return ax - c.width / 2, ay + h / 2, c.width, h
-end
+function Party.GroupRect() return NF.GroupLayout.Rect(cfg(), 1, Party.SIZE) end
 
 -- Unlock mode drop: new group rect -> offset and cell size.
 function Party.SetGroupRect(cx, cy, w, h, resized)
-  local c = cfg()
-  local sp = c.spacing or 2
-  if resized then
-    c.width = math.max(30, math.floor(w + 0.5))
-    c.height = math.max(12, math.floor((h - (Party.SIZE - 1) * sp) / Party.SIZE + 0.5))
-  end
-  local ox, oy = Party.Anchor()
-  local curH = Party.SIZE * c.height + (Party.SIZE - 1) * sp
-  -- where the group's bottom-right should be
-  local wantX, wantY = cx + c.width / 2, cy - curH / 2
-  c.offset.x = math.floor((c.offset.x or 0) + (wantX - ox) + 0.5)
-  c.offset.y = math.floor((c.offset.y or 0) + (wantY - oy) + 0.5)
+  NF.GroupLayout.SetRect(cfg(), 1, Party.SIZE, cx, cy, w, h, resized)
   Party.Refresh()
 end
 
@@ -109,6 +78,7 @@ function Party.Create()
   for i = 1, Party.SIZE do
     local b = UB.Create("party", "party" .. i, "NyteFrames_Party" .. i)
     b.placeFn = placeButton
+    NF.RoleMenu.Attach(b)
     b:Hide()
     Party.buttons[i] = b
   end
@@ -145,5 +115,5 @@ function Party.Refresh()
 end
 
 for _, e in ipairs({ "GROUP_ROSTER_UPDATE", "PLAYER_ROLES_ASSIGNED", "PLAYER_ENTERING_WORLD" }) do
-  NF.On(e, function() if #Party.buttons > 0 or cfg().enabled then Party.Apply() end end)
+  NF.On(e, function() if cfg().enabled then Party.Apply() end end)
 end

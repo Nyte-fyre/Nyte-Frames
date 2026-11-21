@@ -16,6 +16,7 @@ Settings.PAGES = {
   { key = "targettarget", label = "ToT" },
   { key = "targettargettarget", label = "ToToT" },
   { key = "party", label = "Party" },
+  { key = "raid", label = "Raid" },
 }
 
 local function label(parent, text, size)
@@ -140,7 +141,7 @@ end
 
 local function build()
   window = CreateFrame("Frame", "NyteFramesSettings", UIParent)
-  window:SetSize(420, 495)
+  window:SetSize(500, 545)
   window:SetPoint("CENTER")
   window:SetFrameStrata("DIALOG")
   window:SetMovable(true)
@@ -214,10 +215,14 @@ local function build()
     NF.EditMode.Toggle()
   end)
   widgets.unlock:SetPoint("LEFT", widgets.reset, "RIGHT", 10, 0)
+  widgets.columns = slider(window, "Raid columns per row (more wrap above)", 1, 8, 1,
+    function() return cfg().maxColumnsPerRow or 8 end,
+    function(v) cfg().maxColumnsPerRow = v NF.Raid.Apply() end)
+  widgets.columns:SetPoint("TOPLEFT", 14, py - 302)
 
   local note = label(window, "|cff888888Blizzard's target-of-target lives inside its target frame, so it stays hidden while Nyte Target is on. Unlock (/nf unlock) to drag, resize from the corner, nudge with arrow keys and use the grid.|r", 10)
   note:SetPoint("BOTTOMLEFT", 14, 12)
-  note:SetWidth(390)
+  note:SetWidth(470)
 end
 
 function Settings.Show(key)
@@ -236,6 +241,7 @@ function Settings.Show(key)
   end
   -- the player frame always shows "# | %"
   widgets.frameText:SetShown(current ~= "player")
+  widgets.columns:SetShown(current == "raid")
   window:Show()
 end
 
