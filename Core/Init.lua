@@ -1,7 +1,7 @@
 -- Init.lua: namespace, event bus, slash commands.
 local ADDON, NF = ...
 NF.ADDON = ADDON
-NF.VERSION = "0.6.0"
+NF.VERSION = "0.7.0"
 _G.NyteFrames = NF -- for /dump and other addons; nothing secure reads it
 
 local PREFIX = "|cff8a7dffNyte Frames|r: "
@@ -98,6 +98,7 @@ commands.help = function()
   print("  /nf probe inspect    - inspect your target's talents (role detection test)")
   print("  /nf probe off | on   - stop / resume recording")
   print("  /nf probe reset      - clear everything the probe recorded")
+  print("  /nf auras            - status of the Blizzard aura icons on Nyte frames")
   print("  /nf errors           - list Lua errors Nyte Frames caught")
   print("  /nf profile          - show the active profile")
   print("Type /reload to save probe data.")
@@ -106,6 +107,7 @@ end
 commands.config = function() NF.Settings.Toggle() end
 commands.unlock = function() NF.EditMode.Unlock() end
 commands.role = function(rest) NF.RoleMenu.Command(rest) end
+commands.auras = function() NF.AuraBridge.Report() end
 commands.lock = function() NF.EditMode.Lock() end
 commands.settings = commands.config
 

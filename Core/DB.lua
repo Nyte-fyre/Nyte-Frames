@@ -56,6 +56,7 @@ DB.DEFAULTS = {
     smallPowerPct = 10,        -- default split for party/raid
     largePowerPct = 20,        -- default split for player/target
     hideBlizzardCastBar = true,
+    blizzardAuras = true,      -- show Blizzard's own aura icons on our frames (works in combat)
   },
   frames = {
     player = frameDefaults({ width = 195, height = 60, refPos = { x = -271, y = -201 },

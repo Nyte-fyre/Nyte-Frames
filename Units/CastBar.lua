@@ -1,0 +1,156 @@
+-- CastBar.lua: cast bars under the player and target frames (boss later).
+-- Cast info is secret for other units (party probe), so the bar runs off the
+-- duration object (UnitCastingDuration / UnitChannelDuration ->
+-- StatusBar:SetTimerDuration), the spell name goes straight to SetText, and
+-- "not interruptible" colors the bar via SetVertexColorFromBoolean.
+local _, NF = ...
+local CB = {}
+NF.CastBar = CB
+
+local Plain, Try, IsSecret = NF.Compat.Plain, NF.Compat.Try, NF.Compat.IsSecret
+local FLAT = "Interface\\Buttons\\WHITE8X8"
+local HEIGHT = 14
+
+CB.COLOR_CAST = { 1.0, 0.78, 0.25 }
+CB.COLOR_CHANNEL = { 0.45, 0.75, 1.0 }
+CB.COLOR_LOCKED = { 0.6, 0.6, 0.6 } -- not interruptible
+
+local EVENTS = {
+  "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED",
+  "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_DELAYED", "UNIT_SPELLCAST_CHANNEL_START",
+  "UNIT_SPELLCAST_CHANNEL_UPDATE", "UNIT_SPELLCAST_CHANNEL_STOP",
+  "UNIT_SPELLCAST_INTERRUPTIBLE", "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
+}
+
+local function present(v) return IsSecret(v) or v ~= nil end
+
+local function color(bar, notInt, base)
+  local tex = bar:GetStatusBarTexture()
+  if type(Plain(notInt)) == "boolean" then
+    local c = Plain(notInt) and CB.COLOR_LOCKED or base
+    tex:SetVertexColor(c[1], c[2], c[3], 1)
+  elseif IsSecret(notInt) and tex.SetVertexColorFromBoolean and CreateColor then
+    local ok = pcall(tex.SetVertexColorFromBoolean, tex, notInt,
+      CreateColor(CB.COLOR_LOCKED[1], CB.COLOR_LOCKED[2], CB.COLOR_LOCKED[3], 1),
+      CreateColor(base[1], base[2], base[3], 1))
+    if not ok then tex:SetVertexColor(base[1], base[2], base[3], 1) end
+  else
+    tex:SetVertexColor(base[1], base[2], base[3], 1)
+  end
+end
+
+local function runTimer(bar, duration, channel)
+  if not duration then return false end
+  local dir = Enum and Enum.StatusBarTimerDirection
+  local interp = Enum and Enum.StatusBarInterpolation
+  if channel and dir and interp then
+    if pcall(bar.SetTimerDuration, bar, duration, interp.Immediate, dir.RemainingTime) then return true end
+  end
+  return pcall(bar.SetTimerDuration, bar, duration)
+end
+
+function CB.Start(bar)
+  local u = bar.unit
+  local channel = false
+  local okC, name, _, texture, _, _, _, _, notInt = pcall(UnitCastingInfo, u)
+  if not (okC and present(name)) then
+    local okH, cname, _, ctex, _, _, _, cnotInt = pcall(UnitChannelInfo, u)
+    if not (okH and present(cname)) then bar:Hide() return end
+    name, texture, notInt, channel = cname, ctex, cnotInt, true
+  end
+  local duration = channel and Try(UnitChannelDuration, u) or Try(UnitCastingDuration, u)
+  if not runTimer(bar, duration, channel) then bar:Hide() return end
+  bar.duration = duration
+  if not pcall(bar.text.SetText, bar.text, name) then bar.text:SetText("") end
+  if not pcall(bar.icon.SetTexture, bar.icon, texture) then bar.icon:SetTexture(nil) end
+  color(bar, notInt, channel and CB.COLOR_CHANNEL or CB.COLOR_CAST)
+  bar.elapsed = 1
+  bar:Show()
+end
+
+local function onUpdate(bar, e)
+  bar.elapsed = (bar.elapsed or 0) + e
+  if bar.elapsed < 0.1 then return end
+  bar.elapsed = 0
+  local d = bar.duration
+  if d and d.GetRemainingDuration then
+    local ok, rem = pcall(d.GetRemainingDuration, d)
+    if not (ok and pcall(bar.time.SetFormattedText, bar.time, "%.1f", rem)) then bar.time:SetText("") end
+  end
+end
+
+-- Every cast event just re-reads the unit's current cast: a STOP/FAILED can
+-- arrive after the next cast already started, so "hide on stop" would be wrong.
+local function onEvent(bar)
+  CB.Start(bar)
+end
+
+function CB.Create(b)
+  local bar = CreateFrame("StatusBar", nil, b)
+  bar.unit = b.unit
+  bar:SetStatusBarTexture(FLAT)
+  local bg = bar:CreateTexture(nil, "BACKGROUND")
+  bg:SetTexture(FLAT)
+  bg:SetPoint("TOPLEFT", -1, 1)
+  bg:SetPoint("BOTTOMRIGHT", 1, -1)
+  bg:SetVertexColor(0, 0, 0, 0.85)
+  bar.icon = bar:CreateTexture(nil, "ARTWORK")
+  bar.icon:SetPoint("RIGHT", bar, "LEFT", -2, 0)
+  bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  bar.text = bar:CreateFontString(nil, "OVERLAY")
+  bar.text:SetPoint("LEFT", 3, 0)
+  bar.text:SetJustifyH("LEFT")
+  bar.text:SetWordWrap(false)
+  bar.time = bar:CreateFontString(nil, "OVERLAY")
+  bar.time:SetPoint("RIGHT", -3, 0)
+  for _, fs in ipairs({ bar.text, bar.time }) do fs:SetShadowOffset(1, -1) end
+  bar:Hide()
+  bar:SetScript("OnUpdate", onUpdate) -- runs only while a cast is showing
+  bar:SetScript("OnEvent", function(self, event)
+    local ok, err = pcall(onEvent, self, event)
+    if not ok then NF.Error("castbar " .. tostring(event), err) end
+  end)
+  for _, e in ipairs(EVENTS) do pcall(bar.RegisterUnitEvent, bar, e, b.unit) end
+  b.castBar = bar
+  CB.Layout(b)
+  return bar
+end
+
+function CB.Layout(b)
+  local bar = b.castBar
+  if not bar then return end
+  local cfg = NF.profile.frames[b.key]
+  local w = cfg.width
+  local icon = HEIGHT
+  bar:ClearAllPoints()
+  bar:SetPoint("TOPLEFT", b, "BOTTOMLEFT", icon + 2, -3)
+  bar:SetSize(math.max(20, w - icon - 2), HEIGHT)
+  bar.icon:SetSize(icon, icon)
+  local font = NF.Media.Font(NF.profile.general.font)
+  bar.text:SetFont(font, 10, "")
+  bar.time:SetFont(font, 10, "")
+  bar.text:SetWidth(math.max(10, w - icon - 40))
+  bar:SetStatusBarTexture(NF.Media.Texture(NF.profile.general.texture))
+  b.castBarSpace = cfg.castBar and (HEIGHT + 4) or 0
+end
+
+-- Create/refresh for the frames that want one.
+function CB.Apply()
+  for _, key in ipairs({ "player", "target" }) do
+    local b = NF.Frames.byKey[key]
+    local cfg = NF.profile.frames[key]
+    if b and cfg.castBar then
+      if not b.castBar then CB.Create(b) else CB.Layout(b) end
+    elseif b and b.castBar then
+      b.castBar:Hide()
+      b.castBar:UnregisterAllEvents()
+      b.castBar = nil
+      b.castBarSpace = 0
+    end
+  end
+end
+
+NF.On("PLAYER_TARGET_CHANGED", function()
+  local b = NF.Frames and NF.Frames.byKey.target
+  if b and b.castBar then CB.Start(b.castBar) end
+end)

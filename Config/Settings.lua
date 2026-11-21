@@ -168,6 +168,10 @@ local function build()
     function() return NF.profile.general.abbreviate end,
     function(v) NF.profile.general.abbreviate = v NF.Frames.Refresh() end)
   widgets.abbrev:SetPoint("TOPLEFT", 14, y - 28)
+  widgets.blizzAuras = checkbox(window, "Blizzard aura icons (work in combat)",
+    function() return NF.profile.general.blizzardAuras end,
+    function(v) NF.profile.general.blizzardAuras = v NF.Blizzard.PromptReload() end)
+  widgets.blizzAuras:SetPoint("TOPLEFT", 260, y - 28)
 
   -- page tabs
   local tabs = {}
@@ -184,6 +188,38 @@ local function build()
     function() return cfg().enabled end,
     function(v) cfg().enabled = v NF.Blizzard.PromptReload() end)
   widgets.enabled:SetPoint("TOPLEFT", 14, py)
+
+  -- right column: extras for this frame
+  local function extra(name, text, get, set, yOff)
+    widgets[name] = checkbox(window, text, get, function(v) set(v) changed() end)
+    widgets[name]:SetPoint("TOPLEFT", 270, py - yOff)
+  end
+  extra("castBar", "Cast bar", function() return cfg().castBar end,
+    function(v) cfg().castBar = v NF.CastBar.Apply() end, 34)
+  extra("buffs", "Buffs", function() return cfg().auras.buffs end,
+    function(v) cfg().auras.buffs = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end, 56)
+  extra("debuffs", "Debuffs", function() return cfg().auras.debuffs end,
+    function(v) cfg().auras.debuffs = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end, 78)
+  extra("healPred", "Incoming heals", function() return cfg().overlays.healPrediction end,
+    function(v) cfg().overlays.healPrediction = v end, 100)
+  extra("absorbs", "Absorb shields", function() return cfg().overlays.absorbs end,
+    function(v) cfg().overlays.absorbs = v end, 122)
+  extra("threat", "Threat border", function() return cfg().overlays.threat end,
+    function(v) cfg().overlays.threat = v end, 144)
+  extra("range", "Fade when out of range", function() return cfg().overlays.rangeFade end,
+    function(v) cfg().overlays.rangeFade = v end, 166)
+  extra("roleIcon", "Role icon", function() return cfg().icons.role end,
+    function(v) cfg().icons.role = v end, 188)
+  widgets.auraSize = slider(window, "Aura icon size", 8, 40, 1,
+    function() return cfg().auras.size end,
+    function(v) cfg().auras.size = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end)
+  widgets.auraSize:SetPoint("TOPLEFT", 270, py - 232)
+  widgets.auraSize:SetWidth(170)
+  widgets.auraMax = slider(window, "Max auras", 0, 20, 1,
+    function() return cfg().auras.max end,
+    function(v) cfg().auras.max = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end)
+  widgets.auraMax:SetPoint("TOPLEFT", 270, py - 274)
+  widgets.auraMax:SetWidth(170)
   widgets.width = slider(window, "Width", 40, 500, 1,
     function() return cfg().width end, function(v) cfg().width = v changed() end)
   widgets.width:SetPoint("TOPLEFT", 14, py - 46)
@@ -242,6 +278,15 @@ function Settings.Show(key)
   -- the player frame always shows "# | %"
   widgets.frameText:SetShown(current ~= "player")
   widgets.columns:SetShown(current == "raid")
+  local group = (current == "party" or current == "raid")
+  widgets.castBar:SetShown(current == "player" or current == "target")
+  widgets.range:SetShown(group)
+  widgets.roleIcon:SetShown(group)
+  local auras = group or current == "target"
+  widgets.buffs:SetShown(auras)
+  widgets.debuffs:SetShown(auras)
+  widgets.auraSize:SetShown(auras)
+  widgets.auraMax:SetShown(auras)
   window:Show()
 end
 

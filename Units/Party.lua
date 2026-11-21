@@ -105,6 +105,7 @@ function Party.Apply()
       end
     end
     if NF.EditMode and NF.EditMode.active then NF.EditMode.RefreshPreview() end
+    NF.AuraBridge.ScheduleGroup()
   end)
 end
 

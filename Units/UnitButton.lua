@@ -116,7 +116,10 @@ local function edge(parent, layer)
 end
 
 UB.UNIT_EVENTS = { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER",
-  "UNIT_DISPLAYPOWER", "UNIT_NAME_UPDATE", "UNIT_CONNECTION", "UNIT_FLAGS", "UNIT_FACTION" }
+  "UNIT_DISPLAYPOWER", "UNIT_NAME_UPDATE", "UNIT_CONNECTION", "UNIT_FLAGS", "UNIT_FACTION",
+  "UNIT_HEAL_PREDICTION", "UNIT_ABSORB_AMOUNT_CHANGED", "UNIT_HEAL_ABSORB_AMOUNT_CHANGED",
+  "UNIT_THREAT_SITUATION_UPDATE", "UNIT_IN_RANGE_UPDATE" }
+UB.all = {}
 
 -- key = settings key ("party"); globalName defaults to NyteFrames_<key>
 function UB.Create(key, unit, globalName)
@@ -189,6 +192,9 @@ function UB.Create(key, unit, globalName)
   b.roleText = b.textLayer:CreateFontString(nil, "OVERLAY")
   b.roleText:SetShadowOffset(1, -1)
   b.roleText:Hide()
+
+  NF.Overlays.Attach(b)
+  UB.all[#UB.all + 1] = b
 
   -- Clique-style click casting
   ClickCastFrames = ClickCastFrames or {}
@@ -267,6 +273,7 @@ function UB.Layout(b)
   b.healthText:SetFont(font, size, "")
   b.powerText:SetFont(font, math.max(8, size - 2), "")
 
+  NF.Overlays.Layout(b, w, h)
   b.roleIcon:ClearAllPoints()
   b.roleIcon:SetPoint("TOPRIGHT", b.health, "TOPRIGHT", -2, -2)
   b.roleText:SetFont(font, math.max(8, size - 2), "")
@@ -431,6 +438,7 @@ function UB.UpdateAll(b)
   UB.UpdateName(b)
   UB.UpdateHealth(b)
   UB.UpdatePower(b)
+  NF.Overlays.UpdateAll(b)
 end
 
 local HANDLERS = {
@@ -442,7 +450,13 @@ local HANDLERS = {
 
 function UB.OnEvent(b, event)
   local fn = HANDLERS[event]
-  if not fn then return end
-  local ok, err = pcall(fn, b)
-  if not ok then NF.Error(b.key .. " " .. event, err) end
+  if fn then
+    local ok, err = pcall(fn, b)
+    if not ok then NF.Error(b.key .. " " .. event, err) end
+  end
+  local ov = NF.Overlays.EVENTS[event]
+  if ov then
+    local ok, err = pcall(NF.Overlays[ov], b)
+    if not ok then NF.Error(b.key .. " " .. event, err) end
+  end
 end

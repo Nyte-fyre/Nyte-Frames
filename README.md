@@ -3,7 +3,7 @@
 Flat, resizable unit frames for **WoW: Forever**. Party and raid frames sit above
 your player frame, sorted tank, healer, DPS, and grow to the left as groups are added.
 
-**Status: v0.6.0, milestone 6: player, target, ToT, ToToT, role-sorted party and raid frames, unlock mode.** The probe still
+**Status: v0.7.0, milestone 7: frames plus auras (Blizzard icons), cast bars, range fade, threat, heal prediction, absorbs.** The probe still
 records what the client lets addons read.
 
 ## Commands
@@ -15,6 +15,7 @@ records what the client lets addons read.
 - `/nf probe now` - take a snapshot now
 - `/nf probe inspect` - test talent inspection on your target
 - `/nf probe off | on | reset`
+- `/nf auras` - status of the Blizzard aura icons shown on Nyte frames
 - `/nf errors` - errors the addon caught
 - `/nf profile` - the active profile
 

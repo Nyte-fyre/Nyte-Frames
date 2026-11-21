@@ -46,8 +46,11 @@ function FrameMethods.IsTruncated() return false end
 function FrameMethods.SetValue(self, v) end
 function FrameMethods.SetText(self, v) self._text = v end
 function FrameMethods.GetText(self) return self._text end
-function FrameMethods.SetAlphaFromBoolean() end
-function FrameMethods.SetVertexColorFromBoolean() end
+function FrameMethods.SetAlphaFromBoolean(self, v, a, b) self._alphaFromBool = { a, b } end
+function FrameMethods.SetVertexColorFromBoolean(self) self._colorFromBool = true end
+function FrameMethods.SetVertexColor(self, r, g, b) self._color = { r, g, b } end
+function FrameMethods.GetParent(self) return self._parent end
+function FrameMethods.GetStatusBarTexture(self) self._fill = self._fill or CreateFrame("Texture") return self._fill end
 function FrameMethods.SetTimerDuration() end
 function FrameMethods.GetFrameLevel() return 1 end
 function FrameMethods.GetHeight(self) return self._h or 768 end
@@ -131,6 +134,31 @@ C_UIFileAsset = { IsKnownFile = function() return true end }
 UIParent = CreateFrame("Frame", "UIParent")
 PlayerFrame = CreateFrame("Frame", "PlayerFrame")
 TargetFrame = CreateFrame("Frame", "TargetFrame")
+-- Blizzard target aura pools + a raid-style party frame with aura icons
+local function iconList(n, parent) local t = {} for i = 1, n do t[i] = CreateFrame("Button") t[i]._parent = parent end return t end
+TARGET_BUFFS, TARGET_DEBUFFS = iconList(3, TargetFrame), iconList(2, TargetFrame)
+TargetFrame.auraPools = { EnumerateActiveByTemplate = function(self, tpl)
+  local list = (tpl == "TargetBuffFrameTemplate") and TARGET_BUFFS or TARGET_DEBUFFS
+  local i = 0
+  return function() i = i + 1 return list[i] end
+end }
+function TargetFrame:UpdateAuras() end
+CompactPartyFrame = CreateFrame("Frame", "CompactPartyFrame")
+CompactPartyFrameMember1 = CreateFrame("Button", "CompactPartyFrameMember1")
+CompactPartyFrameMember1.unit = "party1"
+CompactPartyFrameMember1.debuffFrames = iconList(3, CompactPartyFrameMember1)
+CompactPartyFrameMember1.buffFrames = iconList(3, CompactPartyFrameMember1)
+CompactPartyFrameMember1.dispelDebuffFrames = iconList(1, CompactPartyFrameMember1)
+function hooksecurefunc(a, b, c)
+  if type(a) == "table" then
+    local orig = a[b] a[b] = function(...) local r = orig(...) c(...) return r end
+  else
+    local orig = _G[a] _G[a] = function(...) local r = orig(...) b(...) return r end
+  end
+end
+function CompactUnitFrame_SetUnit() end
+function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
+function GetThreatStatusColor(s) if s == 3 then return 1, 0, 0 end return 1, 1, 0 end
 TargetFrameToT = CreateFrame("Frame", "TargetFrameToT")
 UISpecialFrames = {}
 tinsert = table.insert
@@ -184,10 +212,13 @@ function UnitIsUnit(a, b) if b == "player" and a == RAID_PLAYER then return true
 ROLES = {}
 function UnitGroupRolesAssigned(u) return ROLES[u] or "DAMAGER" end
 function UnitInRange() return secret(true), true end
-function UnitThreatSituation() return nil end
+THREAT = {}
+function UnitThreatSituation(u) return THREAT[u] end
 function UnitGetIncomingHeals() return secret(0) end
 function UnitGetTotalAbsorbs() return secret(0) end
-function UnitCastingInfo() return nil end
+CASTING = {}
+function UnitCastingInfo(u) local c = CASTING[u] if c then return c.name, "", 136243, 0, 0, false, 1, c.notInt end end
+function UnitCastingDuration(u) if CASTING[u] then return { GetRemainingDuration = function() return secret(1.2) end } end end
 function UnitChannelInfo() return nil end
 function GetRaidTargetIndex() return nil end
 function UnitIsGroupLeader() return false end
@@ -327,7 +358,7 @@ check(pb and tb, "player and target buttons created")
 check(pb._attr.unit == "player" and pb._attr["*type2"] == "togglemenu", "secure attributes set")
 check(watched[tb] and not watched[pb], "target uses unit watch")
 check(pb.healthText._text == "<secret display>", "secret health reached the text via display path: " .. tostring(pb.healthText._text))
-check(PlayerFrame._parent == ns.Blizzard.hiddenParent and TargetFrame._parent == ns.Blizzard.hiddenParent, "Blizzard frames hidden")
+check(PlayerFrame._parent == ns.Blizzard.hiddenParent and ns.Blizzard.ghosted.TargetFrame and TargetFrame._parent ~= ns.Blizzard.hiddenParent, "player frame hidden, target frame ghosted (kept for its auras)")
 check(NyteFramesDB.profiles.Default.calibrated and NyteFramesDB.profiles.Default.frames.player.pos, "calibrated")
 check(NyteFramesDB.profiles.Default.frames.player.width == math.floor(195 * 768 / 1037 + 0.5), "size scaled to UI")
 ns.Settings.Show("target")
@@ -525,6 +556,43 @@ local shown = 0
 for _, f in ipairs(ns.EditMode.fakes) do if f._shown then shown = shown + 1 end end
 check(ns.EditMode.previewMode == "raid" and shown == 24, "fake raid preview shows 24 others: " .. shown)
 ns.EditMode.Lock()
+
+-- M7: Blizzard aura bridge, overlays, cast bars
+inRaid, groupSize, inGroup = false, 2, true
+fire("GROUP_ROSTER_UPDATE")
+runTimers() runTimers()
+local pbtn
+for _, b in ipairs(ns.Party.buttons) do if b.unit == "party1" and ns.Party.placed[b] then pbtn = b end end
+check(pbtn ~= nil, "party1 has a Nyte button")
+local d1 = CompactPartyFrameMember1.debuffFrames[1]
+check(d1._parent == pbtn.textLayer, "Blizzard debuff icon moved onto our party frame")
+check(CompactPartyFrameMember1.debuffFrames[3]._parent == pbtn.textLayer, "3 debuffs shown (party max 3)")
+check(CompactPartyFrameMember1.buffFrames[1]._parent == ns.Blizzard.hiddenParent, "buffs off on party by default: parked")
+check(rawget(CompactPartyFrameMember1, "nfHome") == nil, "no fields written into Blizzard frames")
+ns.AuraBridge.Report()
+-- target: buttons re-anchored after Blizzard's UpdateAuras
+TargetFrame:UpdateAuras()
+local tb = _G.NyteFrames_target
+check(TARGET_BUFFS[1]._parent == tb and TARGET_DEBUFFS[2]._parent == tb, "target aura buttons follow our target frame")
+-- threat border
+THREAT.party1 = 3
+pbtn._scripts.OnEvent(pbtn, "UNIT_THREAT_SITUATION_UPDATE")
+check(pbtn.borders[1]._color[1] == 1 and pbtn.borders[1]._color[2] == 0, "aggro turns the border red")
+THREAT.party1 = nil
+-- range fade through the secret boolean
+pbtn._scripts.OnEvent(pbtn, "UNIT_IN_RANGE_UPDATE")
+check(pbtn._alphaFromBool and pbtn._alphaFromBool[2] == ns.profile.general.rangeAlpha, "secret range -> SetAlphaFromBoolean")
+-- target cast bar with secret name / not-interruptible flag
+check(tb.castBar ~= nil, "target cast bar exists")
+CASTING.target = { name = secret("Shadow Bolt"), notInt = secret(true) }
+tb.castBar._scripts.OnEvent(tb.castBar, "UNIT_SPELLCAST_START")
+check(tb.castBar._shown, "cast bar shows a secret cast")
+check(tb.castBar._fill._colorFromBool, "not-interruptible color from the secret flag")
+tb.castBar._scripts.OnUpdate(tb.castBar, 0.2)
+CASTING.target = nil
+tb.castBar._scripts.OnEvent(tb.castBar, "UNIT_SPELLCAST_STOP")
+check(not tb.castBar._shown, "cast bar hides when the cast ends")
+check(PlayerCastingBarFrame == nil or PlayerCastingBarFrame._parent == ns.Blizzard.hiddenParent, "Blizzard player cast bar hidden")
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 

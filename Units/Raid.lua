@@ -114,6 +114,7 @@ function Raid.Apply()
     end
     Raid.columns = placed
     if NF.EditMode and NF.EditMode.active then NF.EditMode.RefreshPreview() end
+    NF.AuraBridge.ScheduleGroup()
   end)
 end
 
