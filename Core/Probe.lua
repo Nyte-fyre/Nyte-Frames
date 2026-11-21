@@ -474,8 +474,9 @@ end
 local inspectQueue, inspectPending, inspectedGUIDs = {}, nil, {}
 local lastInspect = 0
 
+local AUTO_INSPECT = false -- automatic group inspects off until we know NotifyInspect is allowed from timers
 local function queueGroupInspects()
-  if inCombat or not CanInspect then return end
+  if not AUTO_INSPECT or inCombat or not CanInspect then return end
   local units = {}
   if IsInRaid() then
     for i = 1, GetNumGroupMembers() do units[#units + 1] = "raid" .. i end
@@ -526,7 +527,6 @@ local function onInspectReady(_, guid)
   local ok, res, err = pcall(talentBuckets, id)
   r.talents = ok and (res or err) or ("err: " .. tostring(res):sub(1, 120))
   db.inspects[#db.inspects + 1] = r
-  if ClearInspectPlayer then pcall(ClearInspectPlayer) end
 end
 
 ---------------------------------------------------------------------------
@@ -676,6 +676,15 @@ function P.Start()
     NF.On(e, function(event, unit) if db.enabled then onUnitEvent(event, unit) end end)
   end
   NF.On("INSPECT_READY", function(...) if db.enabled then onInspectReady(...) end end)
+  local function blocked(event, addon, func)
+    if addon ~= NF.ADDON then return end
+    local msg = event .. ": " .. tostring(func)
+    logEvent(msg)
+    P.RecordError(msg)
+    NF.Print("|cffff5555blocked call:|r " .. tostring(func) .. " (saved to the probe log)")
+  end
+  NF.On("ADDON_ACTION_BLOCKED", blocked)
+  NF.On("ADDON_ACTION_FORBIDDEN", blocked)
 
   -- out-of-combat snapshots: login, roster changes, target changes (throttled)
   local lastOOC = 0
@@ -726,9 +735,10 @@ function P.Command(rest)
       NF.Print("target another player first.")
       return
     end
-    table.insert(inspectQueue, 1, "target")
     inspectPending = nil
     lastInspect = 0
+    table.insert(inspectQueue, 1, "target")
+    nextInspect() -- runs inside the slash command, not from a timer
     NF.Print("inspecting your target; result is saved on /reload.")
   else
     local ctxs = 0
