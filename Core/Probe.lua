@@ -371,7 +371,7 @@ local EVENTS = {
   "UNIT_FACTION", "UNIT_IN_RANGE_UPDATE", "UNIT_PHASE", "UNIT_PET", "UNIT_TARGET",
   "RAID_TARGET_UPDATE", "PARTY_LEADER_CHANGED", "PLAYER_ROLES_ASSIGNED", "ROLE_CHANGED_INFORM",
   "GROUP_ROSTER_UPDATE", "INSPECT_READY", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED",
-  "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "COMBAT_LOG_EVENT_UNFILTERED",
+  "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", -- never CLEU: registering it is forbidden here and triggers the blocked-action popup
   "NAME_PLATE_UNIT_ADDED", "UPDATE_MOUSEOVER_UNIT", "ADDON_RESTRICTION_STATE_CHANGED",
   "EDIT_MODE_LAYOUTS_UPDATED", "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED",
 }
@@ -649,6 +649,15 @@ function P.Start()
   local okc, _, classFile = pcall(UnitClass, "player")
   rangeSpell = okc and RANGE_SPELL[classFile] or nil
 
+  local function blocked(event, addon, func)
+    if addon ~= NF.ADDON then return end
+    local msg = event .. ": " .. tostring(func)
+    logEvent(msg)
+    P.RecordError(msg)
+    NF.Print("|cffff5555blocked call:|r " .. tostring(func) .. " (saved to the probe log)")
+  end
+  NF.On("ADDON_ACTION_BLOCKED", blocked)
+  NF.On("ADDON_ACTION_FORBIDDEN", blocked)
   local okS, err = pcall(P.Static)
   if not okS then NF.Error("probe static", err) end
 
@@ -676,15 +685,6 @@ function P.Start()
     NF.On(e, function(event, unit) if db.enabled then onUnitEvent(event, unit) end end)
   end
   NF.On("INSPECT_READY", function(...) if db.enabled then onInspectReady(...) end end)
-  local function blocked(event, addon, func)
-    if addon ~= NF.ADDON then return end
-    local msg = event .. ": " .. tostring(func)
-    logEvent(msg)
-    P.RecordError(msg)
-    NF.Print("|cffff5555blocked call:|r " .. tostring(func) .. " (saved to the probe log)")
-  end
-  NF.On("ADDON_ACTION_BLOCKED", blocked)
-  NF.On("ADDON_ACTION_FORBIDDEN", blocked)
 
   -- out-of-combat snapshots: login, roster changes, target changes (throttled)
   local lastOOC = 0
