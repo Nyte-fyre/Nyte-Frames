@@ -127,6 +127,9 @@ local function cycle(parent, text, options, get, set)
   return f
 end
 
+-- shared with EditMode.lua
+Settings.Widgets = { label = label, flatBG = flatBG, button = button, checkbox = checkbox }
+
 ---------------------------------------------------------------------------
 local function cfg() return NF.profile.frames[current] end
 
@@ -201,16 +204,17 @@ local function build()
     function() return cfg().showPowerText end, function(v) cfg().showPowerText = v changed() end)
   widgets.powerText:SetPoint("TOPLEFT", 14, py - 218)
   widgets.reset = button(window, "Reset this frame", 140, function()
-    local key = current
-    local def = NF.DB.Copy(NF.DB.DEFAULTS.frames[key])
-    NF.Frames.ScaleFrame(def)
-    NF.profile.frames[key] = def
-    changed()
-    Settings.Show(key)
+    NF.Frames.ResetFrame(current)
+    Settings.Show(current)
   end)
   widgets.reset:SetPoint("TOPLEFT", 14, py - 254)
+  widgets.unlock = button(window, "Unlock frames", 140, function()
+    window:Hide()
+    NF.EditMode.Toggle()
+  end)
+  widgets.unlock:SetPoint("LEFT", widgets.reset, "RIGHT", 10, 0)
 
-  local note = label(window, "|cff888888Blizzard's target-of-target lives inside its target frame, so it stays hidden while Nyte Target is on. Drag-to-move and resize handles come with unlock mode (milestone 4).|r", 10)
+  local note = label(window, "|cff888888Blizzard's target-of-target lives inside its target frame, so it stays hidden while Nyte Target is on. Unlock (/nf unlock) to drag, resize from the corner, nudge with arrow keys and use the grid.|r", 10)
   note:SetPoint("BOTTOMLEFT", 14, 12)
   note:SetWidth(390)
 end

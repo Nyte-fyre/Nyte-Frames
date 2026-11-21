@@ -72,6 +72,26 @@ function Frames.Spawn()
   end)
 end
 
+-- Back to the default size and position (keeps the Enabled choice).
+function Frames.ResetFrame(key)
+  local old = NF.profile.frames[key]
+  local def = NF.DB.Copy(NF.DB.DEFAULTS.frames[key])
+  Frames.ScaleFrame(def)
+  if old then def.enabled = old.enabled end
+  NF.profile.frames[key] = def
+  Frames.Refresh(key)
+end
+
+-- Move a frame (center offset from the screen center) and/or resize it.
+function Frames.SetGeometry(key, x, y, w, h)
+  local cfg = NF.profile.frames[key]
+  if not cfg then return end
+  if x and y then cfg.pos = { point = "CENTER", relPoint = "CENTER", x = x, y = y } end
+  if w then cfg.width = w end
+  if h then cfg.height = h end
+  Frames.Refresh(key)
+end
+
 -- Re-apply layout after a settings change (size parts wait for combat end).
 function Frames.Refresh(key)
   if key then

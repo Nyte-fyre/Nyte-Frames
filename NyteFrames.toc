@@ -2,7 +2,7 @@
 ## Title: Nyte Frames
 ## Notes: Flat, resizable unit frames with role-sorted party and raid columns.
 ## Author: Nyte
-## Version: 0.3.0
+## Version: 0.4.0
 ## SavedVariables: NyteFramesDB, NyteFramesProbeDB
 ## SavedVariablesPerCharacter: NyteFramesCharDB
 
@@ -20,8 +20,10 @@ Core\CombatQueue.lua
 Core\Probe.lua
 
 Layout\Sorting.lua
+Layout\Snap.lua
 
 Units\UnitButton.lua
 Units\Frames.lua
 Blizzard.lua
 Config\Settings.lua
+Config\EditMode.lua

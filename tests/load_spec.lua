@@ -50,7 +50,21 @@ function FrameMethods.SetAlphaFromBoolean() end
 function FrameMethods.SetVertexColorFromBoolean() end
 function FrameMethods.SetTimerDuration() end
 function FrameMethods.GetFrameLevel() return 1 end
-function FrameMethods.GetHeight() return 768 end
+function FrameMethods.GetHeight(self) return self._h or 768 end
+function FrameMethods.GetWidth(self) return self._w or 1024 end
+function FrameMethods.SetSize(self, w, h) self._w, self._h = w, h end
+function FrameMethods.SetWidth(self, w) self._w = w end
+function FrameMethods.SetHeight(self, h) self._h = h end
+function FrameMethods.ClearAllPoints(self) self._point = nil end
+function FrameMethods.SetPoint(self, p, rel, rp, x, y)
+  if type(rel) == "number" then x, y = rel, rp end
+  if p == "CENTER" then self._point = { x = x or 0, y = y or 0 } end
+end
+function FrameMethods.GetCenter(self)
+  if self._point then return 512 + self._point.x, 384 + self._point.y end
+  return 512, 384
+end
+function FrameMethods.HasFocus() return false end
 function FrameMethods.GetThumbTexture(self) self._thumb = self._thumb or CreateFrame("Texture") return self._thumb end
 function FrameMethods.Show(self) self._shown = true if self._scripts.OnShow then self._scripts.OnShow(self) end end
 function FrameMethods.Hide(self) self._shown = false end
@@ -127,6 +141,7 @@ function StaticPopup_Show(name) lastPopup = name end
 function ReloadUI() end
 function BreakUpLargeNumbers(v) return v end
 function UnitIsGhost() return false end
+function IsShiftKeyDown() return false end
 STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 WOW_PROJECT_ID = 1
 RAID_CLASS_COLORS = { PALADIN = { r = 0.96, g = 0.55, b = 0.73 } }
@@ -331,6 +346,43 @@ fire("UNIT_TARGET", "target")
 check(tt.healthText._text ~= nil, "UNIT_TARGET on target refreshes ToT")
 fire("UNIT_TARGET", secret("target"))
 check(TargetFrameToT._parent == ns.Blizzard.hiddenParent, "Blizzard ToT hidden")
+
+-- M4: unlock mode
+inCombat = true
+SlashCmdList.NYTEFRAMES("unlock")
+check(not ns.EditMode.active, "unlock refused in combat")
+inCombat = false
+ns.profile.layout.snap = true
+ns.profile.layout.showGrid = false
+SlashCmdList.NYTEFRAMES("unlock")
+local mv = ns.EditMode.movers
+check(ns.EditMode.active and mv.player and mv.target and mv.targettarget and mv.targettargettarget, "movers for every frame")
+local m = mv.player
+m._scripts.OnMouseDown(m)
+m._point = { x = -400.4, y = 100.2 }   -- dropped somewhere empty
+m._scripts.OnDragStop(m)
+local pos = ns.profile.frames.player.pos
+check(pos.x == -400 and pos.y == 100, "drag saved as center offset: " .. pos.x .. "," .. pos.y)
+m._w, m._h = 150.2, 40
+m.grip._scripts.OnMouseUp(m.grip)
+check(ns.profile.frames.player.width == 150 and ns.profile.frames.player.height == 40, "corner resize saved")
+NyteFramesUnlockPanel._scripts.OnKeyDown(NyteFramesUnlockPanel, "LEFT")
+check(ns.profile.frames.player.pos.x == -401, "arrow nudges 1px")
+NyteFramesUnlockPanel._scripts.OnKeyDown(NyteFramesUnlockPanel, "UP")
+check(ns.profile.frames.player.pos.y == 101, "arrow up nudges")
+-- snap a ToT onto the target's left edge
+local tp = ns.profile.frames.target.pos
+local tm = mv.targettarget
+tm._point = { x = tp.x - ns.profile.frames.target.width / 2 + tm._w / 2 + 3, y = 300 }
+tm._scripts.OnDragStop(tm)
+local tl = ns.profile.frames.targettarget.pos.x - ns.profile.frames.targettarget.width / 2
+local targetLeft = tp.x - ns.profile.frames.target.width / 2
+check(math.abs(tl - targetLeft) <= 0.5, "snapped to target's left edge")
+ns.profile.layout.showGrid = true
+ns.EditMode.Lock() ns.EditMode.Unlock()
+check(ns.EditMode.active, "grid on, unlocked again")
+fire("PLAYER_REGEN_DISABLED")
+check(not ns.EditMode.active and not mv.player._shown, "combat locks")
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 
