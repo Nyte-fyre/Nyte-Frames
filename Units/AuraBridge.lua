@@ -237,3 +237,86 @@ function AB.Report()
   end
   if NyteFramesProbeDB then NyteFramesProbeDB.auraBridge = { stats = NF.DB.Copy(AB.stats), at = time() } end
 end
+
+---------------------------------------------------------------------------
+-- /nf auras dump: record how this client's Blizzard frames hold their aura
+-- icons (key names, object types, children), so the bridge can be pointed
+-- at the right parts. Only names and types are stored, never values.
+---------------------------------------------------------------------------
+local PATTERN = { "aura", "buff", "debuff", "dispel", "pool", "icon", "container" }
+local function interesting(k)
+  if type(k) ~= "string" then return false end
+  local l = k:lower()
+  for _, p in ipairs(PATTERN) do if l:find(p, 1, true) then return true end end
+  return false
+end
+
+local function describe(v)
+  local t = type(v)
+  if t == "table" then
+    if type(rawget(v, 0)) == "userdata" and v.GetObjectType then
+      local ok, ot = pcall(v.GetObjectType, v)
+      local okS, shown = pcall(v.IsShown, v)
+      local okN, name = pcall(v.GetName, v)
+      return (ok and ot or "frame") .. (okN and name and (" " .. name) or "") .. ((okS and shown) and " shown" or "")
+    end
+    local n = 0
+    for _ in pairs(v) do n = n + 1 end
+    return "table[" .. n .. "]"
+  end
+  return t
+end
+
+local function scan(obj, path, depth, out, seen)
+  if depth < 0 or type(obj) ~= "table" or seen[obj] or #out > 400 then return end
+  seen[obj] = true
+  for k, v in pairs(obj) do
+    if interesting(k) then out[#out + 1] = path .. "." .. tostring(k) .. " = " .. describe(v) end
+    if type(v) == "table" and type(k) == "string" and not k:find("^_") then
+      scan(v, path .. "." .. k, depth - 1, out, seen)
+    elseif type(v) == "table" and type(k) == "number" and k <= 3 then
+      scan(v, path .. "[" .. k .. "]", depth - 1, out, seen)
+    end
+  end
+  -- child frames too (icons are often unnamed children)
+  if type(rawget(obj, 0)) == "userdata" and obj.GetChildren then
+    local kids = { pcall(obj.GetChildren, obj) }
+    for i = 2, math.min(#kids, 30) do
+      local c = kids[i]
+      local okW, w = pcall(c.GetWidth, c)
+      out[#out + 1] = path .. ":child" .. (i - 1) .. " = " .. describe(c) ..
+        (okW and type(w) == "number" and string.format(" w%.0f", w) or "")
+      if depth > 0 then scan(c, path .. ":child" .. (i - 1), depth - 1, out, seen) end
+    end
+  end
+end
+
+function AB.Dump()
+  local out = {}
+  for _, name in ipairs({ "TargetFrame", "CompactPartyFrameMember1", "CompactPartyFrame",
+      "CompactRaidFrame1", "CompactRaidFrameContainer" }) do
+    local f = _G[name]
+    out[#out + 1] = "== " .. name .. ": " .. (f and describe(f) or "missing")
+    if f then
+      local keys = {}
+      for k, v in pairs(f) do
+        if type(k) == "string" then keys[#keys + 1] = k .. "=" .. type(v) end
+      end
+      table.sort(keys)
+      out[#out + 1] = "keys: " .. table.concat(keys, ", "):sub(1, 3000)
+      local ok, err = pcall(scan, f, name, 3, out, {})
+      if not ok then out[#out + 1] = "scan error: " .. tostring(err) end
+    end
+  end
+  local globals = {}
+  for k, v in pairs(_G) do
+    if type(k) == "string" and type(v) == "function" and (k:find("^CompactUnitFrame_") or k:find("^TargetFrame")
+        or k:find("Aura") and k:find("Frame")) then
+      globals[#globals + 1] = k
+    end
+  end
+  table.sort(globals)
+  out[#out + 1] = "functions: " .. table.concat(globals, ", "):sub(1, 4000)
+  NyteFramesProbeDB.auraDump = { at = time(), lines = out }
+  NF.Print("aura dump saved (" .. #out .. " lines). /reload so it's written to disk.")
+end

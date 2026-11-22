@@ -107,7 +107,9 @@ end
 commands.config = function() NF.Settings.Toggle() end
 commands.unlock = function() NF.EditMode.Unlock() end
 commands.role = function(rest) NF.RoleMenu.Command(rest) end
-commands.auras = function() NF.AuraBridge.Report() end
+commands.auras = function(rest)
+  if (rest or ""):lower() == "dump" then NF.AuraBridge.Dump() else NF.AuraBridge.Report() end
+end
 commands.lock = function() NF.EditMode.Lock() end
 commands.settings = commands.config
 
