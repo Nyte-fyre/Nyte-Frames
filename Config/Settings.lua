@@ -158,6 +158,11 @@ local function build()
   title:SetPoint("TOPLEFT", 14, -12)
   local close = button(window, "X", 22, function() window:Hide() end)
   close:SetPoint("TOPRIGHT", -8, -8)
+  local profiles = button(window, "Profiles / Import", 130, function()
+    window:Hide()
+    NF.Profiles.Show()
+  end)
+  profiles:SetPoint("RIGHT", close, "LEFT", -6, 0)
 
   -- general section
   local y = -44
@@ -289,6 +294,11 @@ function Settings.Show(key)
   widgets.auraSize:SetShown(auras)
   widgets.auraMax:SetShown(auras)
   window:Show()
+end
+
+-- after a profile switch/import, show the new values
+function Settings.RefreshIfShown()
+  if window and window:IsShown() then Settings.Show(current) end
 end
 
 function Settings.Toggle()

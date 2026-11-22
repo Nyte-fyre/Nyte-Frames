@@ -54,14 +54,14 @@ function Blizzard.ApplyCastBar()
 end
 
 -- Ask for a reload after an Enabled toggle.
-function Blizzard.PromptReload()
+function Blizzard.PromptReload(text)
   if StaticPopupDialogs and StaticPopup_Show then
     StaticPopupDialogs.NYTEFRAMES_RELOAD = StaticPopupDialogs.NYTEFRAMES_RELOAD or {
-      text = "Nyte Frames: reload the UI to swap between Nyte and Blizzard frames?",
       button1 = "Reload UI", button2 = "Later",
       OnAccept = function() ReloadUI() end,
       timeout = 0, whileDead = true, hideOnEscape = true,
     }
+    StaticPopupDialogs.NYTEFRAMES_RELOAD.text = text or "Nyte Frames: reload the UI to swap between Nyte and Blizzard frames?"
     if pcall(StaticPopup_Show, "NYTEFRAMES_RELOAD") then return end
   end
   NF.Print("type /reload to apply.")

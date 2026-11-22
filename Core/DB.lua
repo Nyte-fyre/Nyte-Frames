@@ -204,6 +204,106 @@ end
 
 function DB.ProfileName() return DB.profileName or DB.DEFAULT_PROFILE end
 
+-- Sorted profile names.
+function DB.List()
+  local t = {}
+  for name in pairs(NyteFramesDB.profiles) do t[#t + 1] = name end
+  table.sort(t, function(a, b) return a:lower() < b:lower() end)
+  return t
+end
+
+-- Trimmed name, or nil + message. Names must be new unless allowSame matches.
+function DB.ValidName(name, allowSame)
+  if type(name) ~= "string" then return nil, "type a profile name first." end
+  name = name:gsub("^%s+", ""):gsub("%s+$", "")
+  if name == "" then return nil, "type a profile name first." end
+  if #name > 32 then return nil, "profile names are 32 characters at most." end
+  if NyteFramesDB.profiles[name] and name ~= allowSame then return nil, "a profile named '" .. name .. "' already exists." end
+  return name
+end
+
+-- Replace a profile's contents in place (keeps the table, so NF.profile stays valid).
+function DB.Replace(dst, src)
+  for k in pairs(dst) do dst[k] = nil end
+  for k, v in pairs(src) do dst[k] = v end
+  return dst
+end
+
+-- New profile from defaults (source nil) or a copy of another profile.
+function DB.Create(name, sourceName)
+  local n, err = DB.ValidName(name)
+  if not n then return nil, err end
+  local src = sourceName and NyteFramesDB.profiles[sourceName]
+  if sourceName and type(src) ~= "table" then return nil, "no profile named '" .. tostring(sourceName) .. "'." end
+  local p = src and deepCopy(src) or {}
+  if src then
+    DB.Migrate(p, p._schema or DB.SCHEMA)
+  else
+    p._schema = DB.SCHEMA
+  end
+  fill(p, DB.DEFAULTS)
+  NyteFramesDB.profiles[n] = p
+  return n
+end
+
+function DB.Rename(old, new)
+  if type(NyteFramesDB.profiles[old]) ~= "table" then return nil, "no profile named '" .. tostring(old) .. "'." end
+  local n, err = DB.ValidName(new, old)
+  if not n then return nil, err end
+  if n == old then return n end
+  NyteFramesDB.profiles[n], NyteFramesDB.profiles[old] = NyteFramesDB.profiles[old], nil
+  for char, pname in pairs(NyteFramesDB.chars) do
+    if pname == old then NyteFramesDB.chars[char] = n end
+  end
+  if DB.profileName == old then
+    DB.profileName = n
+    NyteFramesCharDB.profileName = n
+  end
+  return n
+end
+
+function DB.Delete(name)
+  if name == DB.profileName then return nil, "that's the profile you're using; switch to another one first." end
+  if type(NyteFramesDB.profiles[name]) ~= "table" then return nil, "no profile named '" .. tostring(name) .. "'." end
+  NyteFramesDB.profiles[name] = nil
+  -- characters that used it fall back to Default next login
+  for char, pname in pairs(NyteFramesDB.chars) do
+    if pname == name then NyteFramesDB.chars[char] = nil end
+  end
+  return true
+end
+
+-- Back to defaults; role overrides are kept (they're about people, not looks).
+function DB.Reset(name)
+  local p = NyteFramesDB.profiles[name or DB.profileName]
+  if type(p) ~= "table" then return nil, "no profile named '" .. tostring(name) .. "'." end
+  local roles = deepCopy(p.roleOverrides or {})
+  DB.Replace(p, fill({ _schema = DB.SCHEMA }, DB.DEFAULTS))
+  p.roleOverrides = roles
+  return true
+end
+
+-- After the active profile changed wholesale (switch, import, reset): rescale
+-- defaults if needed, re-lay everything out, and offer a reload for the parts
+-- that only apply on load (which frames replace Blizzard's).
+function DB.Changed(why)
+  NF.RunOOC("profile-changed", function()
+    if NF.Frames then
+      NF.Frames.Calibrate()
+      pcall(NF.Frames.Refresh)
+      pcall(NF.Frames.UpdateAll)
+    end
+    if NF.Party then pcall(NF.Party.Apply) end
+    if NF.Raid then pcall(NF.Raid.Apply) end
+    if NF.Boss then pcall(NF.Boss.Apply) end
+    if NF.AuraBridge then pcall(NF.AuraBridge.ScheduleGroup) pcall(NF.AuraBridge.LayoutTarget) end
+    if NF.Settings and NF.Settings.RefreshIfShown then NF.Settings.RefreshIfShown() end
+    if NF.Blizzard then
+      NF.Blizzard.PromptReload("Nyte Frames: settings changed (" .. tostring(why) .. "). Reload the UI so every frame picks them up?")
+    end
+  end)
+end
+
 -- Keep the per-character backup current. Called on logout.
 function DB.Backup()
   if NyteFramesCharDB and DB.profile then

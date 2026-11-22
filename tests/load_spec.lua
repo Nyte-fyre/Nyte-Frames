@@ -642,6 +642,106 @@ fire("PLAYER_REGEN_ENABLED")
 check(ns.Boss.slot[B[2]] == 1 and ns.Boss.slot[B[3]] == 2, "re-packed after combat")
 units.boss1, units.boss2, units.boss3, TARGET_IS = nil, nil, nil, nil
 
+-- M9: import/export + profiles
+do
+  local IE, DB = ns.ImportExport, ns.DB
+  local LS, LD = LibStub("LibSerialize"), LibStub("LibDeflate")
+  local function pack(payload, prefix)
+    return (prefix or "NYTEFRAMES1:") .. LD:EncodeForPrint(LD:CompressDeflate(LS:Serialize(payload)))
+  end
+  ns.profile.roleOverrides = { Tanky = "TANK" }
+  ns.profile.frames.player.width = 222
+  local s = IE.Export(false)
+  check(type(s) == "string" and s:find("^NYTEFRAMES1:") ~= nil, "export string is prefixed NYTEFRAMES1:")
+  local r, err = IE.Decode(s)
+  check(r ~= nil, "own export decodes: " .. tostring(err))
+  check(r and r.profile.frames.player.width == 222 and r.profile.frames.player.pos ~= nil, "round trip keeps size and position")
+  check(r and next(r.profile.roleOverrides) == nil and not r.hasRoles, "role overrides left out unless asked")
+  local r2 = IE.Decode("  " .. IE.Export(true):gsub("(.)", "%1", 1) .. "\n")
+  check(r2 and r2.hasRoles and r2.profile.roleOverrides.Tanky == "TANK", "role overrides exported when asked; whitespace ignored")
+
+  ns.profile.frames.party.offset.x = -37
+  ns.profile.layout.showGrid = true
+  local exact = IE.Decode(IE.Export(true))
+  check(exact and IE.Diff(exact) == 0, "export -> import is exact (no setting lost or changed)")
+  ns.profile.layout.showGrid = false
+
+  -- rejects, and nothing changes
+  local before = DB.Copy(ns.profile)
+  local function rejects(str, needle, msg)
+    local res, e = IE.Decode(str)
+    check(res == nil and type(e) == "string" and (not needle or e:find(needle, 1, true)), msg .. ": " .. tostring(e))
+  end
+  rejects("hello", "isn't a Nyte Frames string", "wrong prefix rejected")
+  rejects("NYTEFRAMES2:abc", "format 2", "newer format rejected")
+  rejects("NYTEFRAMES1:" .. s:sub(13, 40), "damaged", "truncated string rejected")
+  local bad = DB.Copy(ns.profile) bad.frames.party.width = "wide"
+  rejects(pack({ addon = "NyteFrames", schema = DB.SCHEMA, profile = bad }), "frames.party.width", "wrong type rejected with its path")
+  local bad2 = DB.Copy(ns.profile) bad2.frames.raid.maxColumnsPerRow = 99
+  rejects(pack({ addon = "NyteFrames", schema = DB.SCHEMA, profile = bad2 }), "outside", "out-of-range value rejected")
+  local bad3 = DB.Copy(ns.profile) bad3.general.textMode = "loud"
+  rejects(pack({ addon = "NyteFrames", schema = DB.SCHEMA, profile = bad3 }), "loud", "unknown enum rejected")
+  local bad4 = DB.Copy(ns.profile) bad4.frames.target.pos = { x = 0/0, y = 1 }
+  rejects(pack({ addon = "NyteFrames", schema = DB.SCHEMA, profile = bad4 }), "pos.x", "NaN position rejected")
+  rejects(pack({ addon = "NyteFrames", schema = DB.SCHEMA + 1, profile = {} }), "newer Nyte Frames", "newer schema rejected")
+  rejects(pack({ addon = "OtherAddon", schema = 1, profile = {} }), "isn't from Nyte Frames", "other addon rejected")
+  check(ns.profile.frames.party.width == before.frames.party.width and ns.profile.general.textMode == before.general.textMode, "failed imports change nothing")
+
+  -- unknown keys ignored, missing keys filled, old schema migrated
+  local old = { frames = { player = { width = 300, auras = { buffs = true, debuffs = true } }, gizmo = {} },
+    general = { sparkle = true }, _schema = 1 }
+  local r3 = IE.Decode(pack({ addon = "NyteFrames", schema = 1, profile = old, name = "Old" }))
+  check(r3 and r3.dropped == 2, "unknown keys counted and dropped: " .. tostring(r3 and r3.dropped))
+  check(r3 and r3.profile.frames.player.auras.buffs == false, "schema 1 import migrated (player auras off)")
+  check(r3 and r3.profile.frames.raid.width == DB.DEFAULTS.frames.raid.width and r3.profile.calibrated, "missing settings filled from defaults, marked calibrated")
+  check(r3 and IE.Summary(r3):find("upgraded", 1, true), "preview mentions the upgrade")
+
+  -- apply as new profile, then into current
+  local mod = DB.Copy(ns.profile) mod.frames.player.width = 250
+  local r4 = IE.Decode(pack({ addon = "NyteFrames", schema = DB.SCHEMA, profile = mod, name = "Shared", hasRoles = false }))
+  local total, parts = IE.Diff(r4)
+  check(total == 1, "preview diff counts 1 change: " .. tostring(total))
+  check(IE.Apply(r4, "new", "Shared"), "apply as new profile")
+  check(DB.ProfileName() == "Shared" and ns.profile.frames.player.width == 250, "switched to the imported profile")
+  check(ns.profile.roleOverrides.Tanky == "TANK", "own role overrides kept when the string has none")
+  check(not IE.Apply(r4, "new", "Shared"), "duplicate profile name refused")
+  r4.profile.frames.player.width = 260
+  check(IE.Apply(r4, "current") and ns.profile.frames.player.width == 260 and NyteFramesDB.profiles.Shared == ns.profile, "apply into current profile in place")
+  inCombat = true
+  check(not IE.Apply(r4, "current"), "no import in combat")
+  inCombat = false
+  runTimers()
+
+  -- profile management
+  check(DB.Create("Healer", "Shared") == "Healer" and NyteFramesDB.profiles.Healer.frames.player.width == 260, "copy profile")
+  check(DB.Create("Fresh") and NyteFramesDB.profiles.Fresh.frames.player.width == DB.DEFAULTS.frames.player.width, "new profile from defaults")
+  check(not DB.Create("Healer"), "create refuses an existing name")
+  check(not DB.Create("   "), "create refuses an empty name")
+  check(DB.Rename("Shared", "Main") == "Main" and DB.ProfileName() == "Main" and NyteFramesDB.chars[DB.CharKey()] == "Main", "rename the active profile follows the character")
+  check(not DB.Delete("Main"), "can't delete the profile in use")
+  check(DB.Delete("Fresh") and NyteFramesDB.profiles.Fresh == nil, "delete another profile")
+  check(DB.Reset("Main") and ns.profile.frames.player.width == DB.DEFAULTS.frames.player.width and ns.profile.roleOverrides.Tanky == "TANK", "reset keeps role overrides")
+
+  -- window flow
+  ns.Profiles.Show("export")
+  local exported = ns.Profiles.ui.text.edit:GetText()
+  check(exported and exported:find("^NYTEFRAMES1:"), "Export button fills the text box")
+  ns.Profiles.ui.text.edit:SetText("junk")
+  ns.Profiles.DoCheck()
+  check(ns.Profiles.checked == nil and ns.Profiles.ui.status:GetText():find("can't import"), "junk shows an error")
+  ns.Profiles.ui.text.edit:SetText(pack({ addon = "NyteFrames", schema = DB.SCHEMA, profile = mod, name = "FromFriend" }))
+  ns.Profiles.DoCheck()
+  check(ns.Profiles.checked and ns.Profiles.ui.preview:GetText():find("Valid", 1, true), "Check shows a preview")
+  ns.Profiles.ui.name:SetText("FromFriend")
+  ns.Profiles.DoApply("new")
+  check(DB.ProfileName() == "FromFriend", "Save as new from the window")
+  StaticPopupDialogs.NYTEFRAMES_DELETE = nil
+  SlashCmdList.NYTEFRAMES("profile Main")
+  check(DB.ProfileName() == "Main", "/nf profile <name> switches")
+  runTimers()
+  check(type(NyteFramesDB.profiles.Default) == "table", "Default profile still there")
+end
+
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 
 io.write(string.format("load_spec: %s (%d failure(s))\n", failed == 0 and "ok" or "FAILED", failed))

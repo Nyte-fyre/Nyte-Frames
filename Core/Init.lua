@@ -1,7 +1,7 @@
 -- Init.lua: namespace, event bus, slash commands.
 local ADDON, NF = ...
 NF.ADDON = ADDON
-NF.VERSION = "0.8.0"
+NF.VERSION = "0.9.0"
 _G.NyteFrames = NF -- for /dump and other addons; nothing secure reads it
 
 local PREFIX = "|cff8a7dffNyte Frames|r: "
@@ -100,7 +100,9 @@ commands.help = function()
   print("  /nf probe reset      - clear everything the probe recorded")
   print("  /nf auras            - status of the Blizzard aura icons on Nyte frames")
   print("  /nf errors           - list Lua errors Nyte Frames caught")
-  print("  /nf profile          - show the active profile")
+  print("  /nf profiles         - profiles window (switch, copy, rename, delete, reset)")
+  print("  /nf profile [name]   - show the active profile, or switch to [name]")
+  print("  /nf export | import  - share exact settings as a NYTEFRAMES1: string")
   print("Type /reload to save probe data.")
 end
 
@@ -119,10 +121,26 @@ commands.errors = function()
   for i = 1, math.min(#NF.errors, 10) do print("  " .. NF.errors[i]) end
 end
 
-commands.profile = function()
+commands.profile = function(rest)
+  rest = (rest or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if rest ~= "" then
+    if not NyteFramesDB.profiles[rest] then
+      NF.Print("no profile named '" .. rest .. "'. Profiles: " .. table.concat(NF.DB.List(), ", "))
+      return
+    end
+    if InCombatLockdown() then NF.Print("can't switch profiles in combat.") return end
+    NF.DB.Use(rest)
+    NF.DB.Changed("switched to '" .. rest .. "'")
+    NF.Print("now using profile '" .. rest .. "'.")
+    return
+  end
   NF.Print("profile '" .. NF.DB.ProfileName() .. "', schema " .. tostring(NF.DB.SCHEMA) ..
-    (NF.DB.restoredFromCharacter and " (restored from the per-character backup)" or ""))
+    (NF.DB.restoredFromCharacter and " (restored from the per-character backup)" or "") ..
+    ". Profiles: " .. table.concat(NF.DB.List(), ", "))
 end
+commands.profiles = function() NF.Profiles.Toggle() end
+commands.export = function() NF.Profiles.Show("export") end
+commands.import = function() NF.Profiles.Show("import") end
 
 commands.probe = function(rest)
   NF.Probe.Command(rest)
