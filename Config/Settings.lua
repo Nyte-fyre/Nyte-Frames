@@ -282,7 +282,7 @@ function Settings.Show(key)
   widgets.castBar:SetShown(current == "player" or current == "target")
   widgets.range:SetShown(group)
   widgets.roleIcon:SetShown(group)
-  local auras = group or current == "target"
+  local auras = group or current == "target" or current == "player"
   widgets.buffs:SetShown(auras)
   widgets.debuffs:SetShown(auras)
   widgets.auraSize:SetShown(auras)

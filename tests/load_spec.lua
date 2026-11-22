@@ -81,6 +81,7 @@ function FrameMethods.SetFormattedText(self, fmt, ...)
   self._text = string.format(fmt, ...)
 end
 function FrameMethods.SetAttribute(self, k, v) self._attr = self._attr or {} self._attr[k] = v end
+function FrameMethods.GetAttribute(self, k) return self._attr and self._attr[k] end
 function FrameMethods.SetParent(self, p) self._parent = p end
 function FrameMethods.SetMinMaxValues(self, a, b) self._min, self._max = a, b end
 function FrameMethods.SetValue(self, v) self._value = v end
@@ -146,6 +147,7 @@ function TargetFrame:UpdateAuras() end
 CompactPartyFrame = CreateFrame("Frame", "CompactPartyFrame")
 CompactPartyFrameMember1 = CreateFrame("Button", "CompactPartyFrameMember1")
 CompactPartyFrameMember1.unit = "party1"
+CompactPartyFrameMember1._attr = { ["aura-organization-type"] = 2, ["max-buffs"] = 3, ["dispel-indicator-option"] = 1 }
 CompactPartyFrameMember1.debuffFrames = iconList(3, CompactPartyFrameMember1)
 CompactPartyFrameMember1.buffFrames = iconList(3, CompactPartyFrameMember1)
 CompactPartyFrameMember1.dispelDebuffFrames = iconList(1, CompactPartyFrameMember1)
@@ -236,7 +238,10 @@ function CanInspect() return true end
 inspected = {}
 function NotifyInspect(u) inspected[#inspected + 1] = u end
 function IsEncounterInProgress() return false end
+ANCHORS, ANCHOR_N = {}, 0
 C_UnitAuras = {
+  AddPrivateAuraAnchor = function(args) ANCHOR_N = ANCHOR_N + 1 ANCHORS[ANCHOR_N] = args return ANCHOR_N end,
+  RemovePrivateAuraAnchor = function(id) ANCHORS[id] = nil end,
   GetAuraDataByIndex = function(u, i, f)
     if inCombat then error("Auras cannot be accessed when secret") end
     return { auraInstanceID = 7, spellId = 1, name = "Buff", duration = 10 }
@@ -358,7 +363,7 @@ check(pb and tb, "player and target buttons created")
 check(pb._attr.unit == "player" and pb._attr["*type2"] == "togglemenu", "secure attributes set")
 check(watched[tb] and not watched[pb], "target uses unit watch")
 check(pb.healthText._text == "<secret display>", "secret health reached the text via display path: " .. tostring(pb.healthText._text))
-check(PlayerFrame._parent == ns.Blizzard.hiddenParent and ns.Blizzard.ghosted.TargetFrame and TargetFrame._parent ~= ns.Blizzard.hiddenParent, "player frame hidden, target frame ghosted (kept for its auras)")
+check(PlayerFrame._parent == ns.Blizzard.hiddenParent and TargetFrame._parent == ns.Blizzard.hiddenParent, "Blizzard player and target frames hidden")
 check(NyteFramesDB.profiles.Default.calibrated and NyteFramesDB.profiles.Default.frames.player.pos, "calibrated")
 check(NyteFramesDB.profiles.Default.frames.player.width == math.floor(195 * 768 / 1037 + 0.5), "size scaled to UI")
 ns.Settings.Show("target")
@@ -564,16 +569,27 @@ runTimers() runTimers()
 local pbtn
 for _, b in ipairs(ns.Party.buttons) do if b.unit == "party1" and ns.Party.placed[b] then pbtn = b end end
 check(pbtn ~= nil, "party1 has a Nyte button")
-local d1 = CompactPartyFrameMember1.debuffFrames[1]
-check(d1._parent == pbtn.textLayer, "Blizzard debuff icon moved onto our party frame")
-check(CompactPartyFrameMember1.debuffFrames[3]._parent == pbtn.textLayer, "3 debuffs shown (party max 3)")
-check(CompactPartyFrameMember1.buffFrames[1]._parent == ns.Blizzard.hiddenParent, "buffs off on party by default: parked")
-check(rawget(CompactPartyFrameMember1, "nfHome") == nil, "no fields written into Blizzard frames")
-ns.AuraBridge.Report()
--- target: buttons re-anchored after Blizzard's UpdateAuras
-TargetFrame:UpdateAuras()
+local function anchorFor(holder) for id, a in pairs(ANCHORS) do if a.parent == holder then return a, id end end end
+local pa = anchorFor(pbtn)
+check(pa and pa.isContainer and pa.unitToken == "party1", "party button is a container aura anchor for its unit")
+check(pbtn._attr["max-debuffs"] == 3 and pbtn._attr["ignore-buffs"] == true, "party: 3 debuffs, buffs off (our settings)")
+check(pbtn._attr["aura-organization-type"] == 2 and pbtn._attr["dispel-indicator-option"] == 1, "Blizzard's own aura settings copied")
+check(pbtn._attr["update-settings"] ~= nil, "settings update signalled")
+-- target strip under the frame
 local tb = _G.NyteFrames_target
-check(TARGET_BUFFS[1]._parent == tb and TARGET_DEBUFFS[2]._parent == tb, "target aura buttons follow our target frame")
+local ta = nil
+for _, a in pairs(ANCHORS) do if a.unitToken == "target" then ta = a end end
+check(ta and ta.parent ~= tb and ta.parent._attr["max-buffs"] == 16, "target auras on a strip under the target frame")
+local pl = nil
+for _, a in pairs(ANCHORS) do if a.unitToken == "player" then pl = a end end
+check(pl == nil, "player auras off by default (Blizzard buff bar shows them)")
+-- re-sort moves the anchor with the unit
+local before = ANCHOR_N
+ns.profile.roleOverrides["Zed Pal"] = "TANK" fire("GROUP_ROSTER_UPDATE") runTimers() runTimers()
+ns.profile.roleOverrides["Zed Pal"] = nil
+local pa2 = anchorFor(pbtn)
+check(pa2 and pa2.unitToken == pbtn.unit, "after a re-sort the anchor follows the button's new unit")
+ns.AuraBridge.Report()
 -- threat border
 THREAT.party1 = 3
 pbtn._scripts.OnEvent(pbtn, "UNIT_THREAT_SITUATION_UPDATE")

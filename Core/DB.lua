@@ -13,7 +13,7 @@ local _, NF = ...
 local DB = {}
 NF.DB = DB
 
-DB.SCHEMA = 1
+DB.SCHEMA = 2
 DB.DEFAULT_PROFILE = "Default"
 
 -- Reference screen the default layout was measured on (author's screenshot).
@@ -60,7 +60,9 @@ DB.DEFAULTS = {
   },
   frames = {
     player = frameDefaults({ width = 195, height = 60, refPos = { x = -271, y = -201 },
-      showPowerText = true, castBar = true }),
+      showPowerText = true, castBar = true,
+      auras = { buffs = false, debuffs = false, max = 16, size = 20, growth = "RIGHT",
+        onlyMine = false, hideLong = false, dispellableFirst = false, filter = {} } }),
     target = frameDefaults({ width = 195, height = 60, refPos = { x = 289, y = -201 },
       castBar = true, auras = { buffs = true, debuffs = true, max = 16, size = 20, growth = "RIGHT",
         onlyMine = false, hideLong = false, dispellableFirst = false, filter = {} } }),
@@ -128,7 +130,12 @@ DB.Fill = fill
 -- Migrations: MIGRATIONS[n] upgrades a profile from schema n-1 to n.
 ---------------------------------------------------------------------------
 DB.MIGRATIONS = {
-  -- [2] = function(profile) ... end,
+  -- 2: player auras now draw under the player frame; Blizzard's buff bar
+  -- already shows them, so start with them off
+  [2] = function(profile)
+    local a = profile.frames and profile.frames.player and profile.frames.player.auras
+    if a then a.buffs, a.debuffs = false, false end
+  end,
 }
 
 function DB.Migrate(profile, fromSchema)

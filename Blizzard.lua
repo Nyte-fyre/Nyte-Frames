@@ -20,16 +20,7 @@ Blizzard.MAP = {
   -- targettargettarget: Blizzard has no frame for it
 }
 
--- With Blizzard aura icons on (general.blizzardAuras), these are "ghosted"
--- instead: kept alive and updating (so their aura icons keep working in
--- combat, where addons can't read auras) but invisible and click-through.
--- Nyte Frames moves their aura icons onto its own frames (AuraBridge.lua).
-Blizzard.GHOST = {
-  TargetFrame = true, CompactPartyFrame = true,
-  CompactRaidFrameContainer = true, CompactRaidFrameManager = true,
-}
-
-Blizzard.hidden, Blizzard.ghosted = {}, {}
+Blizzard.hidden = {}
 
 local function hideOne(name)
   local f = _G[name]
@@ -40,29 +31,12 @@ local function hideOne(name)
   Blizzard.hidden[name] = true
 end
 
-local function ghostOne(name)
-  local f = _G[name]
-  if not f then return end
-  pcall(f.SetAlpha, f, 0)
-  pcall(f.EnableMouse, f, false)
-  if name == "CompactRaidFrameManager" then
-    -- the side panel has its own buttons: park it off screen
-    pcall(f.ClearAllPoints, f)
-    pcall(f.SetPoint, f, "TOPRIGHT", UIParent, "TOPLEFT", -400, 0)
-  end
-  Blizzard.ghosted[name] = true
-end
-Blizzard.GhostOne = ghostOne
-
 function Blizzard.Apply()
   NF.RunOOC("blizzard", function()
-    local ghostOK = NF.profile.general.blizzardAuras
     for key, names in pairs(Blizzard.MAP) do
       local cfg = NF.profile.frames[key]
       if cfg and cfg.enabled then
-        for _, name in ipairs(names) do
-          if ghostOK and Blizzard.GHOST[name] then ghostOne(name) else hideOne(name) end
-        end
+        for _, name in ipairs(names) do hideOne(name) end
       end
     end
     Blizzard.ApplyCastBar()

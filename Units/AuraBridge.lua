@@ -1,241 +1,206 @@
--- AuraBridge.lua: show Blizzard's own aura icons on Nyte frames.
+-- AuraBridge.lua: Blizzard draws the aura icons on Nyte frames.
 --
 -- Addon code can't read auras in combat on this client (every aura API
--- throws "secret while tainted"). Blizzard's frames still can. So the
--- Blizzard frames are kept running but invisible (Blizzard.lua "ghost"), and
--- their aura icons are re-parented onto our frames:
---   party/raid: CompactUnitFrame .buffFrames / .debuffFrames / .dispelDebuffFrames
---   target:     TargetFrame's aura buttons, re-anchored after every Blizzard update
---
--- Rules that keep this taint-free: never write fields into Blizzard tables
--- (our bookkeeping lives in local weak tables), only call frame methods;
--- party/raid re-mapping happens out of combat; the target hook only moves
--- non-protected aura buttons.
+-- throws "secret while tainted"). Blizzard's own raid frames don't read them
+-- in Lua either: they register a *container* aura anchor
+--   C_UnitAuras.AddPrivateAuraAnchor({ isContainer = true, parent = frame, ... })
+-- and Blizzard_PrivateAurasUI (secure) then draws buffs, debuffs, the dispel
+-- overlay and big defensives on that parent, reading its layout from the
+-- parent's attributes ("max-buffs", "debuff-size", ...). The API has no
+-- addon restriction, so Nyte Frames registers the same kind of anchor with
+-- its own frames as the parent:
+--   party/raid: the unit button itself (same shape as Blizzard's raid frames)
+--   player/target: a strip under the frame (under the cast bar)
+-- Secure buttons only take attributes out of combat, so group anchors are
+-- (re)made out of combat, when the button's unit changes.
 local _, NF = ...
 local AB = {}
 NF.AuraBridge = AB
 
-local Plain = NF.Compat.Plain
-local home = setmetatable({}, { __mode = "k" })    -- icon -> Blizzard frame it came from
-local owner = setmetatable({}, { __mode = "k" })   -- icon -> our button it sits on
-AB.stats = {}
+local Plain, Try = NF.Compat.Plain, NF.Compat.Try
+AB.stats = { anchors = 0, failed = 0 }
+local anchors = {}   -- [holder frame] = { id = anchorID, unit = token }
+local strips = {}    -- [frame key] = strip frame
+local settingsTick = 0
 
-local function enabled() return NF.profile.general.blizzardAuras end
+local function enabled()
+  return NF.profile.general.blizzardAuras and C_UnitAuras and C_UnitAuras.AddPrivateAuraAnchor ~= nil
+end
 
----------------------------------------------------------------------------
--- Party / raid: Blizzard compact frames
----------------------------------------------------------------------------
-function AB.CompactFrames()
-  local list = {}
-  local function add(f) if f and type(f) == "table" then list[#list + 1] = f end end
-  for i = 1, 5 do add(_G["CompactPartyFrameMember" .. i]) end
-  for i = 1, 40 do add(_G["CompactRaidFrame" .. i]) end
-  for g = 1, 8 do
-    for m = 1, 5 do add(_G["CompactRaidGroup" .. g .. "Member" .. m]) end
+-- Every attribute Blizzard_PrivateAurasUI reads from a container's parent.
+AB.ATTRS = {
+  "max-buffs", "max-debuffs", "max-dispel-debuffs", "aura-organization-type",
+  "always-hide-duration", "set-aura-size-to-icon-size", "display-larger-role-specific-debuffs",
+  "dispel-indicator-overlay-type", "dispel-indicator-overlay-animation",
+  "dispel-indicator-animated-border", "show-big-defensive", "big-defensive-size",
+  "power-bar-used-height", "group-type", "display-only-dispellable-debuffs",
+  "ignore-buffs", "ignore-debuffs", "ignore-dispel-debuffs", "dispel-indicator-option",
+  "debuff-size", "buff-size", "debuff-border-scale", "buff-border-scale",
+}
+
+-- Blizzard's current settings, copied from one of its live raid-style frames
+-- (it exists even solo: the player's own party frame), so our icons follow
+-- the user's Blizzard raid-frame options unless we override them.
+local template
+function AB.Template()
+  if template then return template end
+  local t = {}
+  for _, name in ipairs({ "CompactPartyFrameMember1", "CompactRaidFrame1", "CompactRaidGroup1Member1" }) do
+    local f = _G[name]
+    if f and f.GetAttribute then
+      for _, a in ipairs(AB.ATTRS) do
+        local v = Plain(Try(f.GetAttribute, f, a))
+        if v ~= nil and t[a] == nil then t[a] = v end
+      end
+    end
   end
-  return list
-end
-
-local function iconLists(f)
-  return {
-    debuff = rawget(f, "debuffFrames"),
-    buff = rawget(f, "buffFrames"),
-    dispel = rawget(f, "dispelDebuffFrames"),
-  }
-end
-
--- Put a row of icons on button b. kind: "debuff" bottom-left growing right,
--- "buff" bottom-right growing left, "dispel" top-right growing left.
-local function placeRow(b, icons, kind, maxShown, size)
   local n = 0
-  for _, icon in ipairs(icons or {}) do
-    n = n + 1
-    if n <= maxShown then
-      if owner[icon] ~= b then
-        home[icon] = home[icon] or icon:GetParent()
-        icon:SetParent(b.textLayer)
-        owner[icon] = b
-      end
-      icon:SetFrameLevel(b.textLayer:GetFrameLevel() + 2)
-      icon:SetSize(size, size)
-      icon:ClearAllPoints()
-      local off = (n - 1) * (size + 1)
-      if kind == "debuff" then
-        icon:SetPoint("BOTTOMLEFT", b.health, "BOTTOMLEFT", 2 + off, 2)
-      elseif kind == "buff" then
-        icon:SetPoint("BOTTOMRIGHT", b.health, "BOTTOMRIGHT", -2 - off, 2)
-      else
-        icon:SetPoint("TOPRIGHT", b.health, "TOPRIGHT", -16 - off, -2)
-      end
-    else
-      -- more icons than wanted: park them where they can't be seen
-      icon:SetParent(NF.Blizzard.hiddenParent)
-      owner[icon] = nil
-    end
+  for _ in pairs(t) do n = n + 1 end
+  AB.stats.templateAttrs = n
+  if n > 0 then template = t end
+  return t
+end
+
+-- Our settings on top of Blizzard's
+local function settingsFor(key)
+  local c = NF.profile.frames[key]
+  local a = {}
+  for k, v in pairs(AB.Template()) do a[k] = v end
+  local size = c.auras.size or 14
+  local maxN = c.auras.max or 3
+  a["max-buffs"] = c.auras.buffs and maxN or 0
+  a["max-debuffs"] = c.auras.debuffs and maxN or 0
+  a["ignore-buffs"] = not c.auras.buffs
+  a["ignore-debuffs"] = not c.auras.debuffs
+  a["max-dispel-debuffs"] = c.overlays.dispelHighlight and 3 or 0
+  a["ignore-dispel-debuffs"] = not c.overlays.dispelHighlight
+  a["debuff-size"] = size
+  a["buff-size"] = size
+  a["debuff-border-scale"] = a["debuff-border-scale"] or 1
+  a["buff-border-scale"] = a["buff-border-scale"] or 1
+  a["power-bar-used-height"] = 0
+  return a, size
+end
+
+local function applySettings(holder, key)
+  local a, size = settingsFor(key)
+  for k, v in pairs(a) do pcall(holder.SetAttribute, holder, k, v) end
+  settingsTick = settingsTick + 1
+  pcall(holder.SetAttribute, holder, "update-settings", settingsTick)
+  return size
+end
+
+local function removeAnchor(holder)
+  local a = anchors[holder]
+  if a and a.id then pcall(C_UnitAuras.RemovePrivateAuraAnchor, a.id) end
+  anchors[holder] = nil
+end
+
+-- Register (or refresh) a container anchor: holder shows unit's auras.
+function AB.Attach(holder, unit, key)
+  if not enabled() then return end
+  local size = applySettings(holder, key)
+  local a = anchors[holder]
+  if a and a.unit == unit and a.id then return end
+  removeAnchor(holder)
+  local ok, id = pcall(C_UnitAuras.AddPrivateAuraAnchor, {
+    unitToken = unit, auraIndex = 1, parent = holder,
+    showCooldownFrame = true, showCooldownEdge = false, showCountdownNumbers = false,
+    showDispelIcon = false, isContainer = true,
+    iconInfo = {
+      iconAnchor = { point = "BOTTOMLEFT", relativeTo = holder, relativePoint = "BOTTOMLEFT", offsetX = 0, offsetY = 0 },
+      iconWidth = size, iconHeight = size, borderScale = 1,
+    },
+  })
+  if ok and id then
+    anchors[holder] = { id = id, unit = unit }
+    AB.stats.anchors = AB.stats.anchors + 1
+  else
+    AB.stats.failed = AB.stats.failed + 1
+    AB.stats.lastError = ok and "no anchor id returned" or tostring(id):sub(1, 200)
   end
 end
 
-local function release(icon)
-  if home[icon] then icon:SetParent(home[icon]) end
-  owner[icon] = nil
-end
+function AB.Detach(holder) removeAnchor(holder) end
 
--- Our buttons by unit token (party + raid)
-local function ourButtons()
-  local map = {}
-  for _, list in ipairs({ NF.Party and NF.Party.buttons or {}, NF.Raid and NF.Raid.buttons or {} }) do
-    for _, b in ipairs(list) do
-      local placed = (NF.Party.placed[b] or (NF.Raid and NF.Raid.placed[b]))
-      if placed and b.unit then map[b.unit] = b end
-    end
-  end
-  return map
-end
-
+---------------------------------------------------------------------------
+-- Party / raid: the buttons themselves are the holders (secure: OOC only)
+---------------------------------------------------------------------------
 function AB.MapGroup()
   if not enabled() then return end
   NF.RunOOC("aurabridge-group", function()
-    local ours = ourButtons()
-    local frames = AB.CompactFrames()
-    local s = { compactFrames = #frames, mapped = 0, icons = 0, missingLists = 0 }
-    -- first give every icon back, then hand out again
-    for icon in pairs(owner) do release(icon) end
-    for _, f in ipairs(frames) do
-      pcall(f.EnableMouse, f, false) -- invisible Blizzard frames must not eat clicks
-      local unit = Plain(rawget(f, "unit"))
-      local b = type(unit) == "string" and ours[unit]
-      local lists = iconLists(f)
-      if not (lists.debuff or lists.buff) then s.missingLists = s.missingLists + 1 end
-      if b then
-        local c = NF.profile.frames[b.key].auras
-        local size = c.size or 14
-        local maxN = c.max or 3
-        placeRow(b, lists.debuff, "debuff", c.debuffs and maxN or 0, size)
-        placeRow(b, lists.buff, "buff", c.buffs and maxN or 0, size)
-        placeRow(b, lists.dispel, "dispel", NF.profile.frames[b.key].overlays.dispelHighlight and 3 or 0, size)
-        s.mapped = s.mapped + 1
+    for _, mod in ipairs({ NF.Party, NF.Raid }) do
+      for _, b in ipairs(mod and mod.buttons or {}) do
+        if mod.placed[b] then AB.Attach(b, b.unit, b.key) else removeAnchor(b) end
       end
     end
-    for _ in pairs(owner) do s.icons = s.icons + 1 end
-    AB.stats.group = s
   end)
 end
 
--- Blizzard re-lays its compact frames on roster/option changes: follow it.
 local scheduled
 function AB.ScheduleGroup()
   if scheduled or not enabled() then return end
   scheduled = true
-  C_Timer.After(0.5, function()
+  C_Timer.After(0.2, function()
     scheduled = false
     AB.MapGroup()
   end)
 end
 
 ---------------------------------------------------------------------------
--- Target: Blizzard's target-frame aura buttons
+-- Player / target: a strip under the frame (plain frame, any time)
 ---------------------------------------------------------------------------
-local function targetButtons()
-  local tf = _G.TargetFrame
-  local pools = tf and rawget(tf, "auraPools")
-  local buffs, debuffs = {}, {}
-  if not pools then return buffs, debuffs, false end
-  local function collect(template, into)
-    local ok, iter, st, ctl = pcall(pools.EnumerateActiveByTemplate, pools, template)
-    if not ok or type(iter) ~= "function" then return false end
-    for frame in iter, st, ctl do into[#into + 1] = frame end
-    return true
+local STRIP_KEYS = { "player", "target" }
+
+local function layoutStrip(key)
+  local b = NF.Frames and NF.Frames.byKey[key]
+  if not b then return end
+  local c = NF.profile.frames[key]
+  local want = c.auras.buffs or c.auras.debuffs
+  local strip = strips[key]
+  if not want then
+    if strip then removeAnchor(strip) strip:Hide() end
+    return
   end
-  local okB = collect("TargetBuffFrameTemplate", buffs)
-  local okD = collect("TargetDebuffFrameTemplate", debuffs)
-  if not okB and not okD then
-    local ok, iter, st, ctl = pcall(pools.EnumerateActive, pools)
-    if ok and type(iter) == "function" then
-      for frame in iter, st, ctl do buffs[#buffs + 1] = frame end
-    end
+  if not strip then
+    strip = CreateFrame("Frame", nil, b)
+    strips[key] = strip
   end
-  return buffs, debuffs, true
+  local size = c.auras.size or 20
+  strip:ClearAllPoints()
+  strip:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, -2 - (b.castBarSpace or 0))
+  strip:SetSize(c.width, size * 2 + 2)
+  strip:Show()
+  AB.Attach(strip, key, key)
 end
 
--- Rows under the target frame: buffs first, debuffs on the next row.
 function AB.LayoutTarget()
   if not enabled() then return end
-  local b = NF.Frames and NF.Frames.byKey.target
-  if not b then return end
-  local c = NF.profile.frames.target.auras
-  local size, maxN = c.size or 20, c.max or 16
-  local perRow = math.max(1, math.floor((NF.profile.frames.target.width + 1) / (size + 1)))
-  local buffs, debuffs, found = targetButtons()
-  AB.stats.target = { found = found, buffs = #buffs, debuffs = #debuffs }
-  local row = 0
-  local function lay(list, show)
-    local n = 0
-    for _, icon in ipairs(list) do
-      n = n + 1
-      if show and n <= maxN then
-        icon:SetParent(b)
-        icon:SetSize(size, size)
-        icon:ClearAllPoints()
-        local col = (n - 1) % perRow
-        local r = row + math.floor((n - 1) / perRow)
-        icon:SetPoint("TOPLEFT", b, "BOTTOMLEFT", col * (size + 1), -2 - r * (size + 1) - (b.castBarSpace or 0))
-      else
-        icon:SetParent(NF.Blizzard.hiddenParent)
-      end
-    end
-    if show and n > 0 then row = row + math.ceil(math.min(n, maxN) / perRow) end
-  end
-  lay(buffs, c.buffs)
-  lay(debuffs, c.debuffs)
+  for _, key in ipairs(STRIP_KEYS) do layoutStrip(key) end
 end
 
 ---------------------------------------------------------------------------
 function AB.Init()
-  if not enabled() then return end
-  -- group: follow Blizzard's own layout passes and our re-sorts
-  for _, fn in ipairs({ "CompactUnitFrame_SetUnit", "DefaultCompactUnitFrameSetup",
-      "CompactUnitFrame_UpdateAll" }) do
-    if type(_G[fn]) == "function" then
-      hooksecurefunc(fn, function() AB.ScheduleGroup() end)
-      AB.stats.hooks = (AB.stats.hooks or 0) + 1
-    end
+  if not enabled() then
+    AB.stats.disabled = NF.profile.general.blizzardAuras and "AddPrivateAuraAnchor missing" or "off in settings"
+    return
   end
-  NF.On("GROUP_ROSTER_UPDATE", AB.ScheduleGroup)
-  NF.On("PLAYER_REGEN_ENABLED", AB.ScheduleGroup)
-  -- target: re-anchor after each Blizzard aura update
-  local tf = _G.TargetFrame
-  if tf and type(tf.UpdateAuras) == "function" then
-    hooksecurefunc(tf, "UpdateAuras", function()
-      local ok, err = pcall(AB.LayoutTarget)
-      if not ok then NF.Error("aura bridge target", err) end
-    end)
-    AB.stats.targetHook = true
-  elseif type(_G.TargetFrame_UpdateAuras) == "function" then
-    hooksecurefunc("TargetFrame_UpdateAuras", function()
-      local ok, err = pcall(AB.LayoutTarget)
-      if not ok then NF.Error("aura bridge target", err) end
-    end)
-    AB.stats.targetHook = "global"
-  end
-  NF.On("PLAYER_TARGET_CHANGED", function() pcall(AB.LayoutTarget) end)
+  AB.LayoutTarget()
+  AB.ScheduleGroup()
   NF.On("PLAYER_LOGOUT", function()
     if NyteFramesProbeDB then NyteFramesProbeDB.auraBridge = { stats = NF.DB.Copy(AB.stats), at = time() } end
   end)
-  AB.ScheduleGroup()
 end
 
--- /nf auras: what the bridge found
+-- /nf auras: what the bridge did
 function AB.Report()
-  local g, t = AB.stats.group or {}, AB.stats.target or {}
-  NF.Print(string.format("aura bridge %s. Group: %d Blizzard frames, %d mapped to ours, %d icons moved%s. Target hook: %s, last update %d buffs / %d debuffs%s.",
-    enabled() and "on" or "off", g.compactFrames or 0, g.mapped or 0, g.icons or 0,
-    (g.missingLists or 0) > 0 and (", " .. g.missingLists .. " frames without icon lists") or "",
-    tostring(AB.stats.targetHook or "missing"), t.buffs or 0, t.debuffs or 0,
-    (t.found == false) and " (no aura pools found)" or ""))
-  if IsInGroup() and not IsInRaid() and (g.compactFrames or 0) == 0 then
-    print("  No Blizzard party frames to borrow from: turn on 'Raid-Style Party Frames' in Blizzard's Edit Mode.")
-  end
-  if NyteFramesProbeDB then NyteFramesProbeDB.auraBridge = { stats = NF.DB.Copy(AB.stats), at = time() } end
+  local s = AB.stats
+  local live = 0
+  for _ in pairs(anchors) do live = live + 1 end
+  NF.Print(string.format("Blizzard aura display %s. %d anchors live (%d made, %d failed), %s Blizzard settings copied.%s",
+    enabled() and "on" or ("off: " .. tostring(s.disabled or "")), live, s.anchors or 0, s.failed or 0,
+    tostring(s.templateAttrs or 0), s.lastError and (" Last error: " .. s.lastError) or ""))
+  if NyteFramesProbeDB then NyteFramesProbeDB.auraBridge = { stats = NF.DB.Copy(s), live = live, at = time() } end
 end
 
 ---------------------------------------------------------------------------
