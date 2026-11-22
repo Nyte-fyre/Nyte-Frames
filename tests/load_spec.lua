@@ -50,7 +50,9 @@ function FrameMethods.SetAlphaFromBoolean(self, v, a, b) self._alphaFromBool = {
 function FrameMethods.SetVertexColorFromBoolean(self) self._colorFromBool = true end
 function FrameMethods.SetVertexColor(self, r, g, b) self._color = { r, g, b } end
 function FrameMethods.GetParent(self) return self._parent end
-function FrameMethods.GetStatusBarTexture(self) self._fill = self._fill or CreateFrame("Texture") return self._fill end
+-- like the client: no fill until SetStatusBarTexture, and each call may swap the object
+function FrameMethods.GetStatusBarTexture(self) return self._fill end
+function FrameMethods.SetStatusBarTexture(self) self._fill = CreateFrame("Texture") end
 function FrameMethods.SetTimerDuration() end
 function FrameMethods.GetFrameLevel() return 1 end
 function FrameMethods.GetHeight(self) return self._h or 768 end
@@ -58,8 +60,10 @@ function FrameMethods.GetWidth(self) return self._w or 1024 end
 function FrameMethods.SetSize(self, w, h) self._w, self._h = w, h end
 function FrameMethods.SetWidth(self, w) self._w = w end
 function FrameMethods.SetHeight(self, h) self._h = h end
-function FrameMethods.ClearAllPoints(self) self._point = nil end
+function FrameMethods.ClearAllPoints(self) self._point = nil self._anchors = {} end
 function FrameMethods.SetPoint(self, p, rel, rp, x, y)
+  self._anchors = self._anchors or {}
+  if type(rel) == "table" then self._anchors[p] = { rel = rel, rp = rp } end
   if type(rel) == "number" then x, y = rel, rp end
   if p == "CENTER" then self._point = { x = x or 0, y = y or 0 } end
 end
@@ -781,6 +785,20 @@ do
   check(full == 1, "UNIT_FLAGS after a death/revive redraws")
   ns.UnitButton.UpdateAll = origAll
   check(ns.Overlays.EVENTS.UNIT_HEALTH == nil, "heal/absorb bars don't recompute on every health tick")
+  -- heal prediction must hang off the live health fill, not the bar's edge
+  local function pinned(btn)
+    local a = btn.healPred._anchors or {}
+    local fill = btn.health:GetStatusBarTexture()
+    return fill ~= nil and a.TOPLEFT and a.TOPLEFT.rel == fill and a.TOPLEFT.rp == "TOPRIGHT"
+      and a.BOTTOMLEFT and a.BOTTOMLEFT.rel == fill
+      and (btn.absorb._anchors or {}).TOPLEFT and btn.absorb._anchors.TOPLEFT.rel == btn.healPred:GetStatusBarTexture()
+  end
+  local allPinned = true
+  for _, btn in ipairs(ns.UnitButton.all) do if not pinned(btn) then allPinned = false end end
+  check(allPinned, "every frame's heal bar starts at the end of its health fill")
+  pb.health:SetStatusBarTexture("swap")
+  ns.UnitButton.Layout(pb)
+  check(pinned(pb), "heal bar re-pins after the health texture is swapped")
   -- profiler
   SlashCmdList.NYTEFRAMES("perf 30")
   check(ns.Perf.on, "/nf perf starts the profiler")

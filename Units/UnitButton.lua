@@ -150,6 +150,9 @@ function UB.Create(key, unit, globalName)
   end
 
   b.health = CreateFrame("StatusBar", nil, b)
+  -- a fill texture must exist before Overlays anchors to it (a StatusBar has
+  -- none until SetStatusBarTexture; anchoring to nil pins to the bar's edge)
+  b.health:SetStatusBarTexture(NF.Media.FLAT)
   b.health.bg = edge(b.health, "BACKGROUND")
   b.health.bg:SetAllPoints()
   b.power = CreateFrame("StatusBar", nil, b)

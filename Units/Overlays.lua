@@ -23,17 +23,13 @@ function OV.Attach(b)
   -- incoming heals and absorbs extend from the end of the health fill;
   -- the health bar clips them so they never spill past the frame
   pcall(b.health.SetClipsChildren, b.health, true)
-  local fill = b.health:GetStatusBarTexture()
   b.healPred = CreateFrame("StatusBar", nil, b.health)
   b.healPred:SetStatusBarTexture(FLAT)
   b.healPred:SetStatusBarColor(0.35, 0.95, 0.45, 0.55)
-  b.healPred:SetPoint("TOPLEFT", fill, "TOPRIGHT")
-  b.healPred:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
   b.absorb = CreateFrame("StatusBar", nil, b.health)
   b.absorb:SetStatusBarTexture(FLAT)
   b.absorb:SetStatusBarColor(0.85, 0.92, 1, 0.55)
-  b.absorb:SetPoint("TOPLEFT", b.healPred:GetStatusBarTexture(), "TOPRIGHT")
-  b.absorb:SetPoint("BOTTOMLEFT", b.healPred:GetStatusBarTexture(), "BOTTOMRIGHT")
+  OV.Anchor(b)
 
   b.raidIcon = b.textLayer:CreateTexture(nil, "OVERLAY")
   b.raidIcon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
@@ -42,7 +38,25 @@ function OV.Attach(b)
   b.leaderIcon:Hide()
 end
 
+-- Pin the heal bar to the end of the health fill, and the absorb bar to the
+-- end of the heal fill. Redone on every layout: the health texture can be
+-- swapped (texture setting), and a missing fill would pin the bars past the
+-- bar's right edge where the clip hides them (the v0.10 "no heal prediction").
+function OV.Anchor(b)
+  local fill = b.health:GetStatusBarTexture()
+  local predFill = b.healPred:GetStatusBarTexture()
+  b.healPred:ClearAllPoints()
+  b.absorb:ClearAllPoints()
+  if not (fill and predFill) then return false end
+  b.healPred:SetPoint("TOPLEFT", fill, "TOPRIGHT")
+  b.healPred:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
+  b.absorb:SetPoint("TOPLEFT", predFill, "TOPRIGHT")
+  b.absorb:SetPoint("BOTTOMLEFT", predFill, "BOTTOMRIGHT")
+  return true
+end
+
 function OV.Layout(b, w, h)
+  OV.Anchor(b)
   local barW = math.max(1, w - 2)
   b.healPred:SetWidth(barW)
   b.absorb:SetWidth(barW)

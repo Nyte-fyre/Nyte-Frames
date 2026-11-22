@@ -1,7 +1,7 @@
 -- Init.lua: namespace, event bus, slash commands.
 local ADDON, NF = ...
 NF.ADDON = ADDON
-NF.VERSION = "0.10.0"
+NF.VERSION = "0.10.1"
 _G.NyteFrames = NF -- for /dump and other addons; nothing secure reads it
 
 local PREFIX = "|cff8a7dffNyte Frames|r: "
