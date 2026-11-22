@@ -230,6 +230,62 @@ local function build()
     function(v) cfg().auras.max = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end)
   widgets.auraMax:SetPoint("TOPLEFT", 270, py - 274)
   widgets.auraMax:SetWidth(170)
+
+  -- Debuff highlight: a side panel (Blizzard draws it, so it works in combat)
+  local hl = CreateFrame("Frame", "NyteFramesHighlightPanel", window)
+  hl:SetSize(310, 236)
+  hl:SetPoint("TOPLEFT", window, "TOPRIGHT", 4, 0)
+  hl:EnableMouse(true)
+  flatBG(hl, 0.05, 0.05, 0.07, 0.96)
+  hl:Hide()
+  widgets.hlPanel = hl
+  local function auraChanged()
+    NF.AuraBridge.ScheduleGroup()
+    pcall(NF.AuraBridge.LayoutTarget)
+  end
+  local hlTitle = label(hl, "Debuff highlight", 13)
+  hlTitle:SetPoint("TOPLEFT", 12, -10)
+  hl.title = hlTitle
+  local hlClose = button(hl, "X", 22, function() hl:Hide() end)
+  hlClose:SetPoint("TOPRIGHT", -6, -6)
+  widgets.hlOn = checkbox(hl, "Color frames with a dispellable debuff",
+    function() return cfg().overlays.dispelHighlight end,
+    function(v) cfg().overlays.dispelHighlight = v auraChanged() end)
+  widgets.hlOn:SetPoint("TOPLEFT", 12, -36)
+  widgets.hlMode = cycle(hl, "Which debuffs",
+    { { "mine", "I can dispel" }, { "all", "Any type" } },
+    function() return cfg().overlays.dispelMode end,
+    function(v) cfg().overlays.dispelMode = v auraChanged() end)
+  widgets.hlMode:SetPoint("TOPLEFT", 12, -62)
+  widgets.hlColor = cycle(hl, "Color",
+    { { "debuff", "Debuff type" }, { "black", "Dark" } },
+    function() return cfg().overlays.dispelColor end,
+    function(v) cfg().overlays.dispelColor = v auraChanged() end)
+  widgets.hlColor:SetPoint("TOPLEFT", 12, -88)
+  widgets.hlPulse = checkbox(hl, "Pulse",
+    function() return cfg().overlays.dispelPulse end,
+    function(v) cfg().overlays.dispelPulse = v auraChanged() end)
+  widgets.hlPulse:SetPoint("TOPLEFT", 12, -116)
+  widgets.hlBorder = checkbox(hl, "Moving border",
+    function() return cfg().overlays.dispelBorder end,
+    function(v) cfg().overlays.dispelBorder = v auraChanged() end)
+  widgets.hlBorder:SetPoint("TOPLEFT", 12, -138)
+  widgets.hlBig = checkbox(hl, "Bigger boss / role debuffs",
+    function() return cfg().auras.bigBossDebuffs end,
+    function(v) cfg().auras.bigBossDebuffs = v auraChanged() end)
+  widgets.hlBig:SetPoint("TOPLEFT", 12, -166)
+  widgets.hlOnlyDispel = checkbox(hl, "Only show debuffs I can dispel",
+    function() return cfg().auras.onlyDispellable end,
+    function(v) cfg().auras.onlyDispellable = v auraChanged() end)
+  widgets.hlOnlyDispel:SetPoint("TOPLEFT", 12, -188)
+  local hlNote = label(hl, "|cff888888By debuff type, not spell name: the game hides which spell it is from addons in combat.|r", 10)
+  hlNote:SetPoint("TOPLEFT", 12, -212)
+  hlNote:SetWidth(286)
+  widgets.hlButton = button(window, "Debuff highlight...", 170, function()
+    hl:SetShown(not hl:IsShown())
+    Settings.Show(current)
+  end)
+  widgets.hlButton:SetPoint("TOPLEFT", 270, py - 306)
   widgets.width = slider(window, "Width", 40, 500, 1,
     function() return cfg().width end, function(v) cfg().width = v changed() end)
   widgets.width:SetPoint("TOPLEFT", 14, py - 46)
@@ -297,6 +353,13 @@ function Settings.Show(key)
   widgets.debuffs:SetShown(auras)
   widgets.auraSize:SetShown(auras)
   widgets.auraMax:SetShown(auras)
+  widgets.hlButton:SetShown(auras)
+  if not auras then widgets.hlPanel:Hide() end
+  -- frame coloring only on group frames; bigger / only-dispellable apply to all icons
+  local pageLabel = current
+  for _, pg in ipairs(Settings.PAGES) do if pg.key == current then pageLabel = pg.label end end
+  widgets.hlPanel.title:SetText("Debuff highlight: " .. pageLabel)
+  for _, n in ipairs({ "hlOn", "hlMode", "hlColor", "hlPulse", "hlBorder" }) do widgets[n]:SetShown(group) end
   window:Show()
 end
 

@@ -25,6 +25,8 @@ local ENUMS = {
   textMode = { percent = true, number = true, both = true },
   nameColor = { class = true, white = true, reaction = true },
   growth = { LEFT = true, RIGHT = true, UP = true, DOWN = true },
+  dispelMode = { mine = true, all = true },
+  dispelColor = { debuff = true, black = true },
 }
 local RANGES = {
   width = { 10, 2000 }, height = { 4, 1000 }, powerHeightPct = { 0, 100 },

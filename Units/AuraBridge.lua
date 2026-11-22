@@ -73,8 +73,32 @@ local function settingsFor(key)
   a["max-debuffs"] = c.auras.debuffs and maxN or 0
   a["ignore-buffs"] = not c.auras.buffs
   a["ignore-debuffs"] = not c.auras.debuffs
-  a["max-dispel-debuffs"] = c.overlays.dispelHighlight and 3 or 0
-  a["ignore-dispel-debuffs"] = not c.overlays.dispelHighlight
+  -- Debuff highlight (Blizzard draws it, so it works in combat). The dispel
+  -- overlay tints the holder; on the player/target strips that would tint
+  -- the icon strip, not the frame, so it's group frames only.
+  local o = c.overlays
+  local hl = o.dispelHighlight and (key == "party" or key == "raid")
+  local DISPLAY = Enum and Enum.RaidDispelDisplayType
+  local OVERLAY = Enum and Enum.RaidDispelOverlayType
+  -- max-dispel-debuffs: Blizzard's own value is the safe one (its dispel
+  -- frame list comes from an XML template we can't see)
+  a["max-dispel-debuffs"] = hl and (AB.Template()["max-dispel-debuffs"] or 3) or 0
+  a["ignore-dispel-debuffs"] = not hl
+  if DISPLAY then
+    local v
+    if not hl then v = DISPLAY.Disabled
+    elseif o.dispelMode == "all" then v = DISPLAY.DisplayAll
+    else v = DISPLAY.DispellableByMe end
+    if v ~= nil then a["dispel-indicator-option"] = v end
+  end
+  if OVERLAY then
+    local v = (o.dispelColor == "black") and OVERLAY.UseBlack or OVERLAY.UseDebuffColor
+    if v ~= nil then a["dispel-indicator-overlay-type"] = v end
+  end
+  a["dispel-indicator-overlay-animation"] = (hl and o.dispelPulse) and true or false
+  a["dispel-indicator-animated-border"] = (hl and o.dispelBorder) and true or false
+  a["display-larger-role-specific-debuffs"] = c.auras.bigBossDebuffs and true or false
+  a["display-only-dispellable-debuffs"] = c.auras.onlyDispellable and true or false
   a["debuff-size"] = size
   a["buff-size"] = size
   a["debuff-border-scale"] = a["debuff-border-scale"] or 1

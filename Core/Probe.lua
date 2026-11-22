@@ -570,6 +570,50 @@ local function unitClassOf(unit)
   return (unit:gsub("%d+", "N"))
 end
 
+-- UNIT_AURA's own payload (updateInfo): the last place a spell id could be
+-- readable in combat (every aura *function* throws there). Records, per
+-- context and unit kind, whether the payload, its first added aura and that
+-- aura's fields are ok / secret / err, and whether an instance id from it can
+-- be looked up. Throttled to one sample per unit kind per half second.
+local PAYLOAD_KEYS = { "spellId", "name", "dispelName", "auraInstanceID", "isHarmful",
+  "isHelpful", "isBossAura", "isRaid", "icon", "sourceUnit", "duration" }
+local lastPayload = {}
+local function probeAuraPayload(unit, info)
+  local cls = unitClassOf(unit)
+  if cls ~= "player" and cls ~= "target" and cls ~= "partyN" and cls ~= "raidN" then return end
+  local now = GetTime()
+  if lastPayload[cls] and now - lastPayload[cls] < 0.5 then return end
+  lastPayload[cls] = now
+  local ctx = context()
+  record(ctx, cls, "payload", true, info)
+  if type(info) ~= "table" or (issecretvalue and issecretvalue(info)) then return end
+  record(ctx, cls, "payload.isFullUpdate", pcall(function() return info.isFullUpdate end))
+  local okU, upd = pcall(function() return info.updatedAuraInstanceIDs end)
+  record(ctx, cls, "payload.updatedIDs", okU, upd)
+  if okU and type(upd) == "table" then
+    record(ctx, cls, "payload.updatedID1", pcall(function() return upd[1] end))
+  end
+  local okA, added = pcall(function() return info.addedAuras end)
+  record(ctx, cls, "payload.added", okA, added)
+  if not (okA and type(added) == "table") then return end
+  local okF, a = pcall(function() return added[1] end)
+  if not okF or a == nil then return end
+  record(ctx, cls, "payloadAura", okF, a)
+  if type(a) ~= "table" then return end
+  for _, k in ipairs(PAYLOAD_KEYS) do
+    record(ctx, cls, "payloadAura." .. k, pcall(function() return a[k] end))
+  end
+  local okI, id = pcall(function() return a.auraInstanceID end)
+  if okI and id ~= nil and C_UnitAuras then
+    if C_UnitAuras.GetAuraDataByAuraInstanceID then
+      record(ctx, cls, "payload.byInstanceID", pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, id))
+    end
+    if C_UnitAuras.IsAuraFilteredOutByInstanceID then
+      record(ctx, cls, "payload.filteredRaid", pcall(C_UnitAuras.IsAuraFilteredOutByInstanceID, unit, id, "HARMFUL|RAID"))
+    end
+  end
+end
+
 local function onUnitEvent(event, unit)
   local ctx = context()
   local c = db.eventCounts[ctx]
@@ -685,6 +729,11 @@ function P.Start()
       "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_TARGET" }) do
     NF.On(e, function(event, unit) if db.enabled then onUnitEvent(event, unit) end end)
   end
+  NF.On("UNIT_AURA", function(_, unit, info)
+    if not db.enabled then return end
+    local ok, e = pcall(probeAuraPayload, unit, info)
+    if not ok then NF.Error("probe aura payload", e) end
+  end)
   NF.On("INSPECT_READY", function(...) if db.enabled then onInspectReady(...) end end)
 
   -- out-of-combat snapshots: login, roster changes, target changes (throttled)

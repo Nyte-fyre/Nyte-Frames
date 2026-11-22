@@ -110,6 +110,12 @@ def main():
         lines.append(f"- {ctx}: " + "; ".join(f"{e} {c}" for e, c in sorted(evs.items())))
     lines += ["", "## events (last 150)"]
     lines += [f"- {e}" for e in db.get("events", [])[-150:]]
+    lines += ["", "## aura payload (UNIT_AURA updateInfo; debuff highlight part A)"]
+    for ctx, units in sorted(db.get("agg", {}).items()):
+        for unit, fields in sorted(units.items()):
+            row = [f"{f}={short(c)}" for f, c in sorted(fields.items()) if f.startswith("payload")]
+            if row:
+                lines.append(f"- {ctx} **{unit}**: " + ", ".join(row))
     lines += ["", "## perf (/nf perf, newest first)"]
     for r in db.get("perf", []) or []:
         lines.append(f"- {r.get('at')} v{r.get('version')} {r.get('context')}: {r.get('seconds', 0):.0f}s, "

@@ -152,7 +152,7 @@ function TargetFrame:UpdateAuras() end
 CompactPartyFrame = CreateFrame("Frame", "CompactPartyFrame")
 CompactPartyFrameMember1 = CreateFrame("Button", "CompactPartyFrameMember1")
 CompactPartyFrameMember1.unit = "party1"
-CompactPartyFrameMember1._attr = { ["aura-organization-type"] = 2, ["max-buffs"] = 3, ["dispel-indicator-option"] = 1 }
+CompactPartyFrameMember1._attr = { ["aura-organization-type"] = 2, ["max-buffs"] = 3, ["dispel-indicator-option"] = 1, ["max-dispel-debuffs"] = 4 }
 CompactPartyFrameMember1.debuffFrames = iconList(3, CompactPartyFrameMember1)
 CompactPartyFrameMember1.buffFrames = iconList(3, CompactPartyFrameMember1)
 CompactPartyFrameMember1.dispelDebuffFrames = iconList(1, CompactPartyFrameMember1)
@@ -188,7 +188,9 @@ WOW_PROJECT_ID = 1
 RAID_CLASS_COLORS = { PALADIN = { r = 0.96, g = 0.55, b = 0.73 } }
 CurveConstants = { ScaleTo100 = {} }
 Constants = { TraitConsts = { INSPECT_TRAIT_CONFIG_ID = -1 } }
-Enum = { PowerType = { Mana = 0 } }
+Enum = { PowerType = { Mana = 0 },
+  RaidDispelDisplayType = { Disabled = 0, DisplayAll = 1, DispellableByMe = 2 },
+  RaidDispelOverlayType = { UseDebuffColor = 0, UseBlack = 1 } }
 function GetBuildInfo() return "1.60.1", "70205", "Oct 2 2026", 16001 end
 function GetLocale() return "enUS" end
 function GetTime() return 1000 + os.clock() end
@@ -258,6 +260,10 @@ C_UnitAuras = {
     ANCHOR_PARENTS[args.parent] = true
     ANCHOR_N = ANCHOR_N + 1 ANCHORS[ANCHOR_N] = args return ANCHOR_N end,
   RemovePrivateAuraAnchor = function(id) ANCHORS[id] = nil end,
+  GetAuraDataByAuraInstanceID = function(u, id)
+    if inCombat then error("Auras cannot be accessed when secret") end
+    return { auraInstanceID = id }
+  end,
   GetAuraDataByIndex = function(u, i, f)
     if inCombat then error("Auras cannot be accessed when secret") end
     if AURAS and AURAS[u] then return AURAS[u][i] end
@@ -641,7 +647,32 @@ local function anchorFor(owner) for id, a in pairs(ANCHORS) do if a.parent._owne
 local pa = anchorFor(pbtn)
 check(pa and pa.isContainer and pa.unitToken == "party1", "party button is a container aura anchor for its unit")
 check(pa.parent._attr["max-debuffs"] == 3 and pa.parent._attr["ignore-buffs"] == true, "party: 3 debuffs, buffs off (our settings)")
-check(pa.parent._attr["aura-organization-type"] == 2 and pa.parent._attr["dispel-indicator-option"] == 1, "Blizzard's own aura settings copied")
+check(pa.parent._attr["aura-organization-type"] == 2, "Blizzard's own aura settings copied")
+-- debuff highlight (Blizzard-drawn, works in combat)
+local pat = pa.parent._attr
+check(pat["dispel-indicator-option"] == 2 and pat["dispel-indicator-overlay-type"] == 0,
+  "party: highlight debuffs I can dispel, in the debuff's color (default)")
+check(pat["max-dispel-debuffs"] == 4, "dispel slots use Blizzard's own count (safe size)")
+check(pat["display-larger-role-specific-debuffs"] == true and pat["display-only-dispellable-debuffs"] == false,
+  "bigger boss debuffs on, all debuffs shown (defaults)")
+local hlCfg = ns.profile.frames.party
+hlCfg.overlays.dispelMode, hlCfg.overlays.dispelColor, hlCfg.overlays.dispelPulse = "all", "black", true
+hlCfg.auras.onlyDispellable = true
+ns.AuraBridge.MapGroup() runTimers()
+local pat2 = anchorFor(pbtn).parent._attr
+check(pat2["dispel-indicator-option"] == 1 and pat2["dispel-indicator-overlay-type"] == 1
+  and pat2["dispel-indicator-overlay-animation"] == true and pat2["display-only-dispellable-debuffs"] == true,
+  "highlight options reach Blizzard: any type, dark, pulse, only dispellable")
+hlCfg.overlays.dispelHighlight = false
+ns.AuraBridge.MapGroup() runTimers()
+local pat3 = anchorFor(pbtn).parent._attr
+check(pat3["dispel-indicator-option"] == 0 and pat3["max-dispel-debuffs"] == 0, "highlight off: Blizzard draws none")
+hlCfg.overlays.dispelHighlight, hlCfg.overlays.dispelMode, hlCfg.overlays.dispelColor = true, "mine", "debuff"
+hlCfg.overlays.dispelPulse, hlCfg.auras.onlyDispellable = false, false
+ns.AuraBridge.MapGroup() runTimers()
+local tStripAttr
+for _, a in pairs(ANCHORS) do if a.unitToken == "target" then tStripAttr = a.parent._attr end end
+check(tStripAttr and tStripAttr["dispel-indicator-option"] == 0, "no dispel tint on the target's icon strip")
 check(pa.parent._attr["update-settings"] ~= nil, "settings update signalled")
 -- target strip under the frame
 local tb = _G.NyteFrames_target
@@ -742,6 +773,18 @@ check(not pbtn.statusIcon._shown, "status icon can be turned off")
 ns.profile.frames.party.icons.status = true
 RES.party1 = nil
 ns.UnitButton.Dispatch(pbtn, "INCOMING_RESURRECT_CHANGED")
+-- probe: UNIT_AURA payload readability (part A of debuff highlight)
+inCombat = true
+fire("PLAYER_REGEN_DISABLED")
+fire("UNIT_AURA", "party1", { isFullUpdate = false, addedAuras = { { spellId = secret(589), name = secret("Shadow Word: Pain"),
+  auraInstanceID = 99, dispelName = secret("Magic"), isHarmful = true } } })
+inCombat = false
+fire("PLAYER_REGEN_ENABLED")
+local pctx
+for ctx, units in pairs(NyteFramesProbeDB.agg) do if ctx:find("^combat") and units.partyN and units.partyN["payloadAura.spellId"] then pctx = units.partyN end end
+check(pctx and pctx["payloadAura.spellId"].secret == 1 and pctx["payloadAura.auraInstanceID"].ok == 1,
+  "probe records which UNIT_AURA payload fields are secret in combat")
+check(pctx and pctx["payload.byInstanceID"] and pctx["payload.byInstanceID"].err == 1, "probe tries the instance id lookup (throws in combat here)")
 -- threat border
 THREAT.party1 = 3
 pbtn._scripts.OnEvent(pbtn, "UNIT_THREAT_SITUATION_UPDATE")
