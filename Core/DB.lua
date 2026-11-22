@@ -92,6 +92,7 @@ DB.DEFAULTS = {
       auras = { buffs = false, debuffs = true, max = 3, size = 14, growth = "LEFT",
         onlyMine = false, hideLong = true, dispellableFirst = true, filter = {} } }),
     boss = frameDefaults({ width = 195, height = 40, spacing = 4, castBar = true,
+      offset = { x = 0, y = 0 },
       auras = { buffs = false, debuffs = true, max = 6, size = 16, growth = "RIGHT",
         onlyMine = true, hideLong = false, dispellableFirst = false, filter = {} } }),
   },

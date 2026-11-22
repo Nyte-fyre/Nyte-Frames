@@ -10,7 +10,7 @@ NF.EditMode = EditMode
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 local LABELS = {
   player = "Player", target = "Target", targettarget = "Target of Target",
-  targettargettarget = "ToT's Target", focus = "Focus", pet = "Pet", party = "Party", raid = "Raid (25-player block)",
+  targettargettarget = "ToT's Target", focus = "Focus", pet = "Pet", party = "Party", raid = "Raid (25-player block)", boss = "Boss stack",
 }
 local MIN_W, MIN_H, MAX_W, MAX_H = 40, 12, 500, 200
 
@@ -40,6 +40,9 @@ local function geomFor(key)
   end
   if key == "raid" then
     return { get = NF.Raid.GroupRect, set = NF.Raid.SetGroupRect }
+  end
+  if key == "boss" then
+    return { get = NF.Boss.GroupRect, set = NF.Boss.SetGroupRect }
   end
   return {
     get = function()
@@ -80,6 +83,7 @@ local function commit(m, resized)
   for _, o in pairs(movers) do
     -- the party column hangs off the player frame, so it's no snap target for it
     local attached = (m.key == "player" and (o.key == "party" or o.key == "raid"))
+      or (o.key == "boss" and (m.key == "target" or m.key == "targettarget" or m.key == "targettargettarget"))
     if o ~= m and o:IsShown() and not attached then others[#others + 1] = rectOf(o) end
   end
   local w, h = round(m:GetWidth()), round(m:GetHeight())
@@ -383,8 +387,9 @@ EditMode.FAKE_PARTY = {   -- deliberately unsorted; the preview sorts it
 local fakes = {}
 EditMode.fakes = fakes
 
-local function fakeFrame(i)
-  local f = fakes[i]
+local function fakeFrame(i, pool)
+  pool = pool or fakes
+  local f = pool[i]
   if f then return f end
   f = CreateFrame("Frame", nil, UIParent)
   f:SetFrameStrata("MEDIUM")
@@ -407,7 +412,7 @@ local function fakeFrame(i)
   f.value:SetPoint("BOTTOMRIGHT", -3, 3)
   f.role = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   f.role:SetPoint("TOPRIGHT", -3, -3)
-  fakes[i] = f
+  pool[i] = f
   return f
 end
 
@@ -448,6 +453,7 @@ function EditMode.RefreshPreview()
   end
   placed = placed or {}
   for i = #placed + 1, #fakes do fakes[i]:Hide() end
+  EditMode.RefreshBossPreview()
   if not c then return end
   local pct = math.max(0, math.min(60, c.powerHeightPct or 0))
   local textMode = c.textMode or NF.profile.general.textMode
@@ -470,6 +476,39 @@ function EditMode.RefreshPreview()
   end
 end
 
+-- Boss preview: the Illidari Council, with Gathios as your target (so he's
+-- in the main slot = target frame) and the other three in the stack.
+EditMode.FAKE_BOSSES = { "High Nethermancer Zerevor", "Lady Malande", "Veras Darkshadow" }
+local bossFakes = {}
+function EditMode.RefreshBossPreview()
+  local c = NF.profile.frames.boss
+  local real = NF.Compat.Plain(NF.Compat.Try(UnitExists, "boss1")) == true
+  local show = EditMode.active and c.enabled and not real
+  for i, name in ipairs(EditMode.FAKE_BOSSES) do
+    local f = bossFakes[i]
+    if show then
+      f = fakeFrame(i, bossFakes)
+      local x, y = NF.Boss.SlotCenter(i - 1)
+      f:ClearAllPoints()
+      f:SetPoint("CENTER", UIParent, "CENTER", x, y)
+      f:SetSize(c.width, c.height)
+      local pct = math.max(0, math.min(60, c.powerHeightPct or 0))
+      local powerH = (pct > 0) and math.max(1, math.floor((c.height - 2) * pct / 100 + 0.5)) or 0
+      f.power:SetHeight(math.max(1, powerH))
+      f.power:SetShown(powerH > 0)
+      f.bar:SetPoint("BOTTOMRIGHT", -1, 1 + powerH + (powerH > 0 and 1 or 0))
+      f.bar:SetVertexColor(0.85, 0.2, 0.2)
+      f.name:SetText(name)
+      f.name:SetWidth(math.max(10, c.width - 40))
+      f.value:SetText("100%")
+      f.role:SetText("")
+      f:Show()
+    elseif f then
+      f:Hide()
+    end
+  end
+end
+
 ---------------------------------------------------------------------------
 -- Enter / leave
 ---------------------------------------------------------------------------
@@ -486,6 +525,7 @@ function EditMode.Unlock()
   -- party and raid sit in the same spot: one at a time, switched on the panel
   local group = EditMode.previewMode
   if NF.profile.frames[group].enabled then keys[#keys + 1] = group end
+  if NF.profile.frames.boss.enabled then keys[#keys + 1] = "boss" end
   for _, key in ipairs(keys) do
     movers[key] = movers[key] or createMover(key)
     movers[key]:Show()

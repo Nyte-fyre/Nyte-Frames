@@ -71,6 +71,7 @@ function Frames.Spawn()
     Frames.UpdateAll()
     NF.Party.Apply()
     NF.Raid.Apply()
+    NF.Boss.Apply()
     NF.CastBar.Apply()
     NF.AuraBridge.Init()
   end)
@@ -100,17 +101,20 @@ end
 function Frames.Refresh(key)
   if key == "party" then NF.Party.Refresh() return end
   if key == "raid" then NF.Raid.Refresh() return end
+  if key == "boss" then NF.Boss.Refresh() NF.CastBar.Apply() return end
   if key then
     local b = Frames.byKey[key]
     if b then UB.Layout(b) end
     -- the party column hangs off the player frame
     if key == "player" then NF.Party.Refresh() NF.Raid.Refresh() end
     if key == "player" or key == "target" then NF.CastBar.Apply() pcall(NF.AuraBridge.LayoutTarget) end
+    if key == "target" or key == "targettarget" or key == "targettargettarget" then NF.Boss.Refresh() end
     return
   end
   for _, b in pairs(Frames.byKey) do UB.Layout(b) end
   NF.Party.Refresh()
   NF.Raid.Refresh()
+  NF.Boss.Refresh()
   NF.CastBar.Apply()
 end
 

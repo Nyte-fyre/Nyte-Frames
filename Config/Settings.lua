@@ -17,6 +17,7 @@ Settings.PAGES = {
   { key = "targettargettarget", label = "ToToT" },
   { key = "party", label = "Party" },
   { key = "raid", label = "Raid" },
+  { key = "boss", label = "Boss" },
 }
 
 local function label(parent, text, size)
@@ -176,8 +177,8 @@ local function build()
   -- page tabs
   local tabs = {}
   for i, page in ipairs(Settings.PAGES) do
-    local t = button(window, page.label, 74, function() Settings.Show(page.key) end)
-    t:SetPoint("TOPLEFT", 14 + (i - 1) * 78, y - 66)
+    local t = button(window, page.label, 64, function() Settings.Show(page.key) end)
+    t:SetPoint("TOPLEFT", 14 + (i - 1) * 68, y - 66)
     t.key = page.key
     tabs[i] = t
   end
@@ -279,7 +280,7 @@ function Settings.Show(key)
   widgets.frameText:SetShown(current ~= "player")
   widgets.columns:SetShown(current == "raid")
   local group = (current == "party" or current == "raid")
-  widgets.castBar:SetShown(current == "player" or current == "target")
+  widgets.castBar:SetShown(current == "player" or current == "target" or current == "boss")
   widgets.range:SetShown(group)
   widgets.roleIcon:SetShown(group)
   local auras = group or current == "target" or current == "player"

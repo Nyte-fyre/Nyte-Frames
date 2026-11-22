@@ -3,7 +3,7 @@
 Flat, resizable unit frames for **WoW: Forever**. Party and raid frames sit above
 your player frame, sorted tank, healer, DPS, and grow to the left as groups are added.
 
-**Status: v0.7.0, milestone 7: frames plus auras (Blizzard icons), cast bars, range fade, threat, heal prediction, absorbs.** The probe still
+**Status: v0.8.0, milestone 8: all frames incl. boss stack, Blizzard-drawn auras, cast bars, overlays.** The probe still
 records what the client lets addons read.
 
 ## Commands

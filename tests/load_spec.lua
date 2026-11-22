@@ -68,6 +68,7 @@ function FrameMethods.GetCenter(self)
   return 512, 384
 end
 function FrameMethods.HasFocus() return false end
+function FrameMethods.SetAlpha(self, a) self._alpha = a end
 function FrameMethods.GetName(self) return self._name end
 function FrameMethods.GetThumbTexture(self) self._thumb = self._thumb or CreateFrame("Texture") return self._thumb end
 function FrameMethods.Show(self) self._shown = true if self._scripts.OnShow then self._scripts.OnShow(self) end end
@@ -163,6 +164,7 @@ function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
 function GetThreatStatusColor(s) if s == 3 then return 1, 0, 0 end return 1, 1, 0 end
 TargetFrameToT = CreateFrame("Frame", "TargetFrameToT")
 UISpecialFrames = {}
+BossTargetFrameContainer = CreateFrame("Frame", "BossTargetFrameContainer")
 tinsert = table.insert
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 unpack = unpack or table.unpack
@@ -210,7 +212,8 @@ function UnitIsConnected() return true end
 function UnitReaction() return 2 end
 function UnitCanAttack(_, u) return u == "target" end
 RAID_PLAYER = nil
-function UnitIsUnit(a, b) if b == "player" and a == RAID_PLAYER then return true end return a == b end
+TARGET_IS = nil
+function UnitIsUnit(a, b) if b == "player" and a == RAID_PLAYER then return true end if b == "target" and a ~= "target" then return a == TARGET_IS end return a == b end
 ROLES = {}
 function UnitGroupRolesAssigned(u) return ROLES[u] or "DAMAGER" end
 function UnitInRange() return secret(true), true end
@@ -429,17 +432,17 @@ local mv = ns.EditMode.movers
 check(ns.EditMode.active and mv.player and mv.target and mv.targettarget and mv.targettargettarget, "movers for every frame")
 local m = mv.player
 m._scripts.OnMouseDown(m)
-m._point = { x = -400.4, y = 100.2 }   -- dropped somewhere empty
+m._point = { x = -400.4, y = -330.2 }   -- dropped somewhere empty
 m._scripts.OnDragStop(m)
 local pos = ns.profile.frames.player.pos
-check(pos.x == -400 and pos.y == 100, "drag saved as center offset: " .. pos.x .. "," .. pos.y)
+check(pos.x == -400 and pos.y == -330, "drag saved as center offset: " .. pos.x .. "," .. pos.y)
 m._w, m._h = 150.2, 40
 m.grip._scripts.OnMouseUp(m.grip)
 check(ns.profile.frames.player.width == 150 and ns.profile.frames.player.height == 40, "corner resize saved")
 NyteFramesUnlockPanel._scripts.OnKeyDown(NyteFramesUnlockPanel, "LEFT")
 check(ns.profile.frames.player.pos.x == -401, "arrow nudges 1px: " .. ns.profile.frames.player.pos.x)
 NyteFramesUnlockPanel._scripts.OnKeyDown(NyteFramesUnlockPanel, "UP")
-check(ns.profile.frames.player.pos.y == 101, "arrow up nudges")
+check(ns.profile.frames.player.pos.y == -329, "arrow up nudges: " .. ns.profile.frames.player.pos.y)
 -- snap a ToT onto the target's left edge
 local tp = ns.profile.frames.target.pos
 local tm = mv.targettarget
@@ -609,6 +612,35 @@ CASTING.target = nil
 tb.castBar._scripts.OnEvent(tb.castBar, "UNIT_SPELLCAST_STOP")
 check(not tb.castBar._shown, "cast bar hides when the cast ends")
 check(PlayerCastingBarFrame == nil or PlayerCastingBarFrame._parent == ns.Blizzard.hiddenParent, "Blizzard player cast bar hidden")
+
+-- M8: boss stack above the target column, target swap
+check(BossTargetFrameContainer._parent == ns.Blizzard.hiddenParent, "Blizzard boss frames hidden")
+local B = ns.Boss.buttons
+check(#B == 5 and watched[B[1]] and watched[B[5]], "5 boss buttons with unit watch")
+check(B[1].castBar ~= nil, "boss cast bars")
+-- preview when no boss exists
+ns.EditMode.Unlock()
+check(ns.EditMode.movers.boss and ns.EditMode.movers.boss._shown, "boss stack mover")
+ns.EditMode.Lock()
+units.boss1, units.boss2, units.boss3 = true, true, true
+TARGET_IS = "boss2"
+fire("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
+check(ns.Boss.slot[B[1]] == 0 and ns.Boss.slot[B[3]] == 1 and ns.Boss.slot[B[2]] == 2, "targeted boss2 leaves the stack, boss3 moves down")
+check(B[2]._alpha == ns.Boss.FADED and B[1]._alpha == 1, "targeted boss faded")
+check(B[1]._point.y < B[3]._point.y, "stack grows up")
+local tcfg = ns.profile.frames.target
+local tttTop = ns.profile.frames.targettargettarget.pos.y + ns.profile.frames.targettargettarget.height / 2
+check(B[1]._point.y - ns.profile.frames.boss.height / 2 > tttTop, "stack sits above the ToT column")
+-- in combat: only the fade changes
+inCombat = true
+TARGET_IS = "boss3"
+fire("PLAYER_TARGET_CHANGED")
+check(B[3]._alpha == ns.Boss.FADED and B[2]._alpha == 1, "combat swap = fade")
+check(ns.Boss.slot[B[3]] == 1, "no re-pack in combat")
+inCombat = false
+fire("PLAYER_REGEN_ENABLED")
+check(ns.Boss.slot[B[2]] == 1 and ns.Boss.slot[B[3]] == 2, "re-packed after combat")
+units.boss1, units.boss2, units.boss3, TARGET_IS = nil, nil, nil, nil
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 

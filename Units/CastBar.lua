@@ -136,9 +136,13 @@ end
 
 -- Create/refresh for the frames that want one.
 function CB.Apply()
+  local list = {}
   for _, key in ipairs({ "player", "target" }) do
-    local b = NF.Frames.byKey[key]
-    local cfg = NF.profile.frames[key]
+    if NF.Frames.byKey[key] then list[#list + 1] = NF.Frames.byKey[key] end
+  end
+  for _, b in ipairs(NF.Boss and NF.Boss.buttons or {}) do list[#list + 1] = b end
+  for _, b in ipairs(list) do
+    local cfg = NF.profile.frames[b.key]
     if b and cfg.castBar then
       if not b.castBar then CB.Create(b) else CB.Layout(b) end
     elseif b and b.castBar then

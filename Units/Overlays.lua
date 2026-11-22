@@ -86,6 +86,7 @@ function OV.UpdateThreat(b)
 end
 
 function OV.UpdateRange(b)
+  if b.key == "boss" then return end -- boss alpha belongs to the target swap (Boss.lua)
   if not cfgOf(b).overlays.rangeFade or b.key == "player" then
     b:SetAlpha(1)
     return
