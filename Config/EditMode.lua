@@ -4,13 +4,14 @@
 -- keys. Moves are saved as CENTER offsets and applied to the secure frames
 -- out of combat. Entering is blocked in combat; combat start locks again.
 local _, NF = ...
+local L = NF.L
 local EditMode = {}
 NF.EditMode = EditMode
 
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 local LABELS = {
-  player = "Player", target = "Target", targettarget = "Target of Target",
-  targettargettarget = "ToT's Target", focus = "Focus", pet = "Pet", party = "Party", raid = "Raid (25-player block)", boss = "Boss stack",
+  player = L["Player"], target = L["Target"], targettarget = L["Target of Target"],
+  targettargettarget = L["ToT's Target"], focus = L["Focus"], pet = L["Pet"], party = L["Party"], raid = L["Raid (25-player block)"], boss = L["Boss stack"],
 }
 local MIN_W, MIN_H, MAX_W, MAX_H = 40, 12, 500, 200
 
@@ -266,12 +267,12 @@ local function buildPanel()
   panel:SetClampedToScreen(true)
   w.flatBG(panel, 0.05, 0.05, 0.07, 0.95)
 
-  local title = w.label(panel, "Nyte Frames unlocked  |cff888888drag, corner to resize, arrows nudge (Shift = 10)|r")
+  local title = w.label(panel, "Nyte Frames " .. L["unlocked"] .. "  |cff888888" .. L["drag, corner to resize, arrows nudge (Shift = 10)"] .. "|r")
   title:SetPoint("TOPLEFT", 10, -8)
-  local lock = w.button(panel, "Lock", 60, function() EditMode.Lock() end)
+  local lock = w.button(panel, L["Lock"], 60, function() EditMode.Lock() end)
   lock:SetPoint("TOPRIGHT", -8, -6)
 
-  panel.grid = w.checkbox(panel, "Grid",
+  panel.grid = w.checkbox(panel, L["Grid"],
     function() return layout().showGrid end,
     function(v) layout().showGrid = v updateGrid() end)
   panel.grid:SetPoint("TOPLEFT", 10, -32)
@@ -284,7 +285,7 @@ local function buildPanel()
   local plus = w.button(panel, "+", 22, function()
     layout().grid = math.min(64, (layout().grid or 16) + 4) EditMode.UpdatePanel() updateGrid() end)
   plus:SetPoint("LEFT", minus, "RIGHT", 36, 0)
-  panel.snap = w.checkbox(panel, "Snap to frames",
+  panel.snap = w.checkbox(panel, L["Snap to frames"],
     function() return layout().snap end, function(v) layout().snap = v end)
   panel.snap:SetPoint("LEFT", plus, "RIGHT", 16, 0)
   panel.snap:SetWidth(130)
@@ -316,19 +317,19 @@ local function buildPanel()
     b:SetPoint("LEFT", prev, "RIGHT", 4, 0)
     prev = b
   end
-  local reset = w.button(panel, "Reset frame", 90, function()
+  local reset = w.button(panel, L["Reset frame"], 90, function()
     if selected then NF.Frames.ResetFrame(selected.key) placeAll() EditMode.UpdatePanel() end
   end)
   reset:SetPoint("LEFT", prev, "RIGHT", 8, 0)
-  panel.resetAll = w.button(panel, "Reset all frames", 120, function(self)
+  panel.resetAll = w.button(panel, L["Reset all frames"], 120, function(self)
     if not self.armed then
       self.armed = true
-      self.text:SetText("Click to confirm")
-      C_Timer.After(3, function() self.armed = false self.text:SetText("Reset all frames") end)
+      self.text:SetText(L["Click to confirm"])
+      C_Timer.After(3, function() self.armed = false self.text:SetText(L["Reset all frames"]) end)
       return
     end
     self.armed = false
-    self.text:SetText("Reset all frames")
+    self.text:SetText(L["Reset all frames"])
     for key in pairs(movers) do NF.Frames.ResetFrame(key) end
     placeAll()
     EditMode.UpdatePanel()
@@ -359,7 +360,7 @@ end
 function EditMode.UpdatePanel()
   if not panel then return end
   panel.gridSize:SetText(tostring(layout().grid or 16))
-  panel.preview.text:SetText("Showing: " .. ((EditMode.previewMode == "raid") and "Raid" or "Party"))
+  panel.preview.text:SetText(L["Showing: %s"]:format((EditMode.previewMode == "raid") and L["Raid"] or L["Party"]))
   panel.grid:Refresh()
   panel.snap:Refresh()
   if selected then
@@ -368,7 +369,7 @@ function EditMode.UpdatePanel()
     if not panel.x:HasFocus() then panel.x:SetText(tostring(round(x))) end
     if not panel.y:HasFocus() then panel.y:SetText(tostring(round(y))) end
   else
-    panel.selected:SetText("|cff888888click a frame|r")
+    panel.selected:SetText("|cff888888" .. L["click a frame"] .. "|r")
     panel.x:SetText("")
     panel.y:SetText("")
   end
@@ -556,6 +557,6 @@ end
 NF.On("PLAYER_REGEN_DISABLED", function()
   if EditMode.active then
     EditMode.Lock()
-    NF.Print("frames locked for combat.")
+    NF.Print(L["frames locked for combat."])
   end
 end)

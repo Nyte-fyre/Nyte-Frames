@@ -198,7 +198,7 @@ function DB.Init()
   DB.Use(name)
   if DB.restoredFromCharacter then
     C_Timer.After(6, function()
-      NF.Print("your settings file didn't load (client bug); restored them from this character's backup.")
+      NF.Print(NF.L["your settings file didn't load (client bug); restored them from this character's backup."])
     end)
   end
 end
@@ -231,11 +231,11 @@ end
 
 -- Trimmed name, or nil + message. Names must be new unless allowSame matches.
 function DB.ValidName(name, allowSame)
-  if type(name) ~= "string" then return nil, "type a profile name first." end
+  if type(name) ~= "string" then return nil, NF.L["type a profile name first."] end
   name = name:gsub("^%s+", ""):gsub("%s+$", "")
-  if name == "" then return nil, "type a profile name first." end
-  if #name > 32 then return nil, "profile names are 32 characters at most." end
-  if NyteFramesDB.profiles[name] and name ~= allowSame then return nil, "a profile named '" .. name .. "' already exists." end
+  if name == "" then return nil, NF.L["type a profile name first."] end
+  if #name > 32 then return nil, NF.L["profile names are 32 characters at most."] end
+  if NyteFramesDB.profiles[name] and name ~= allowSame then return nil, NF.L["a profile named '%s' already exists."]:format(name) end
   return name
 end
 
@@ -251,7 +251,7 @@ function DB.Create(name, sourceName)
   local n, err = DB.ValidName(name)
   if not n then return nil, err end
   local src = sourceName and NyteFramesDB.profiles[sourceName]
-  if sourceName and type(src) ~= "table" then return nil, "no profile named '" .. tostring(sourceName) .. "'." end
+  if sourceName and type(src) ~= "table" then return nil, NF.L["no profile named '%s'."]:format(tostring(sourceName)) end
   local p = src and deepCopy(src) or {}
   if src then
     DB.Migrate(p, p._schema or DB.SCHEMA)
@@ -264,7 +264,7 @@ function DB.Create(name, sourceName)
 end
 
 function DB.Rename(old, new)
-  if type(NyteFramesDB.profiles[old]) ~= "table" then return nil, "no profile named '" .. tostring(old) .. "'." end
+  if type(NyteFramesDB.profiles[old]) ~= "table" then return nil, NF.L["no profile named '%s'."]:format(tostring(old)) end
   local n, err = DB.ValidName(new, old)
   if not n then return nil, err end
   if n == old then return n end
@@ -280,8 +280,8 @@ function DB.Rename(old, new)
 end
 
 function DB.Delete(name)
-  if name == DB.profileName then return nil, "that's the profile you're using; switch to another one first." end
-  if type(NyteFramesDB.profiles[name]) ~= "table" then return nil, "no profile named '" .. tostring(name) .. "'." end
+  if name == DB.profileName then return nil, NF.L["that's the profile you're using; switch to another one first."] end
+  if type(NyteFramesDB.profiles[name]) ~= "table" then return nil, NF.L["no profile named '%s'."]:format(tostring(name)) end
   NyteFramesDB.profiles[name] = nil
   -- characters that used it fall back to Default next login
   for char, pname in pairs(NyteFramesDB.chars) do
@@ -293,7 +293,7 @@ end
 -- Back to defaults; role overrides are kept (they're about people, not looks).
 function DB.Reset(name)
   local p = NyteFramesDB.profiles[name or DB.profileName]
-  if type(p) ~= "table" then return nil, "no profile named '" .. tostring(name) .. "'." end
+  if type(p) ~= "table" then return nil, NF.L["no profile named '%s'."]:format(tostring(name)) end
   local roles = deepCopy(p.roleOverrides or {})
   DB.Replace(p, fill({ _schema = DB.SCHEMA }, DB.DEFAULTS))
   p.roleOverrides = roles

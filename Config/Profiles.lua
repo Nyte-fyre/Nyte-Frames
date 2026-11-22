@@ -5,6 +5,7 @@
 -- Bottom: one text box for export and import. Import is two steps: Check
 -- (decode + validate + preview), then Apply to current or Save as new.
 local _, NF = ...
+local L = NF.L
 local P = {}
 NF.Profiles = P
 
@@ -29,7 +30,7 @@ end
 local function confirm(key, text, onAccept)
   if not (StaticPopupDialogs and StaticPopup_Show) then onAccept() return end
   StaticPopupDialogs[key] = {
-    text = text, button1 = YES or "Yes", button2 = NO or "No",
+    text = text, button1 = YES or L["Yes"], button2 = NO or L["No"],
     OnAccept = onAccept, timeout = 0, whileDead = true, hideOnEscape = true,
   }
   StaticPopup_Show(key)
@@ -52,7 +53,7 @@ function P.RefreshList()
     local name = names[(page - 1) * PER_PAGE + i]
     if name then
       b.name = name
-      b.text:SetText(name .. (name == NF.DB.ProfileName() and "  |cff8be28b(in use)|r" or ""))
+      b.text:SetText(name .. (name == NF.DB.ProfileName() and "  |cff8be28b" .. L["(in use)"] .. "|r" or ""))
       b.selected = (name == selected)
       b:Refresh()
       b:Show()
@@ -63,7 +64,7 @@ function P.RefreshList()
   ui.pageText:SetText(pages > 1 and (page .. "/" .. pages) or "")
   setEnabled(ui.prev, page > 1)
   setEnabled(ui.next, page < pages)
-  ui.active:SetText("This character uses: |cffb3a6ff" .. NF.DB.ProfileName() .. "|r")
+  ui.active:SetText(L["This character uses: %s"]:format("|cffb3a6ff" .. NF.DB.ProfileName() .. "|r"))
   local isActive = selected == NF.DB.ProfileName()
   setEnabled(ui.use, not isActive)
   setEnabled(ui.delete, not isActive)
@@ -76,7 +77,7 @@ local function use(name)
   NF.DB.Use(name)
   P.checked = nil
   NF.DB.Changed("switched to '" .. name .. "'")
-  status("now using '" .. name .. "'.")
+  status(L["now using '%s'."]:format(name))
   P.RefreshList()
 end
 
@@ -135,7 +136,7 @@ function P.DoExport()
   ui.text.edit:SetFocus()
   ui.text.edit:HighlightText()
   ui.preview:SetText("")
-  status("exported '" .. NF.DB.ProfileName() .. "' (" .. #s .. " characters). Press Ctrl+C to copy.")
+  status(L["exported '%s' (%d characters). Press Ctrl+C to copy."]:format(NF.DB.ProfileName(), #s))
   P.RefreshList()
 end
 
@@ -148,24 +149,24 @@ function P.DoCheck()
   else
     ui.preview:SetText(NF.ImportExport.Summary(result))
     if result.name and nameText() == "" then ui.name:SetText(result.name) end
-    status("looks good. Apply it to the current profile, or save it as a new one.")
+    status(L["looks good. Apply it to the current profile, or save it as a new one."])
   end
   P.RefreshList()
 end
 
 function P.DoApply(mode)
   local result = P.checked
-  if not result then status("check the string first.", true) return end
+  if not result then status(L["check the string first."], true) return end
   if mode == "new" then
     local name, err = NF.DB.ValidName(nameText())
     if not name then status(err, true) return end
     local ok, aerr = NF.ImportExport.Apply(result, "new", name)
     if not ok then status(aerr, true) return end
-    status("imported as '" .. name .. "' and switched to it.")
+    status(L["imported as '%s' and switched to it."]:format(name))
   else
     local ok, aerr = NF.ImportExport.Apply(result, "current")
     if not ok then status(aerr, true) return end
-    status("imported into '" .. NF.DB.ProfileName() .. "'.")
+    status(L["imported into '%s'."]:format(NF.DB.ProfileName()))
   end
   P.checked = nil
   ui.preview:SetText("")
@@ -189,7 +190,7 @@ local function build()
   flatBG(window, 0.05, 0.05, 0.07, 0.97)
   tinsert(UISpecialFrames, "NyteFramesProfiles")
 
-  local title = label(window, "Nyte Frames  |cff888888Profiles & import/export|r", 14)
+  local title = label(window, "Nyte Frames  |cff888888" .. L["Profiles & import/export"] .. "|r", 14)
   title:SetPoint("TOPLEFT", 14, -12)
   local close = button(window, "X", 22, function() window:Hide() end)
   close:SetPoint("TOPRIGHT", -8, -8)
@@ -219,7 +220,7 @@ local function build()
   ui.pageText:SetPoint("LEFT", ui.next, "RIGHT", 6, 0)
 
   -- name box
-  local nameLabel = label(window, "Name")
+  local nameLabel = label(window, L["Name"])
   nameLabel:SetPoint("TOPLEFT", 120, -186)
   local nameBox = CreateFrame("EditBox", nil, window)
   nameBox:SetSize(200, 20)
@@ -235,35 +236,35 @@ local function build()
 
   -- actions on the selected profile
   local y = -214
-  ui.use = button(window, "Use", 70, function() use(selected) end)
+  ui.use = button(window, L["Use"], 70, function() use(selected) end)
   ui.use:SetPoint("TOPLEFT", 14, y)
-  ui.new = button(window, "New", 70, function()
-    act(function() return NF.DB.Create(nameText()) end, "created '" .. nameText() .. "' from the defaults (select it and press Use).")
+  ui.new = button(window, L["New"], 70, function()
+    act(function() return NF.DB.Create(nameText()) end, L["created '%s' from the defaults (select it and press Use)."]:format(nameText()))
   end)
   ui.new:SetPoint("LEFT", ui.use, "RIGHT", 4, 0)
-  ui.copy = button(window, "Copy", 70, function()
-    act(function() return NF.DB.Create(nameText(), selected) end, "copied '" .. tostring(selected) .. "' to '" .. nameText() .. "'.")
+  ui.copy = button(window, L["Copy"], 70, function()
+    act(function() return NF.DB.Create(nameText(), selected) end, L["copied '%s' to '%s'."]:format(tostring(selected), nameText()))
   end)
   ui.copy:SetPoint("LEFT", ui.new, "RIGHT", 4, 0)
-  ui.rename = button(window, "Rename", 70, function()
+  ui.rename = button(window, L["Rename"], 70, function()
     local old = selected
     local n, err = NF.DB.Rename(old, nameText())
-    if n then selected = n status("renamed '" .. old .. "' to '" .. n .. "'.") else status(err, true) end
+    if n then selected = n status(L["renamed '%s' to '%s'."]:format(old, n)) else status(err, true) end
     P.RefreshList()
   end)
   ui.rename:SetPoint("LEFT", ui.copy, "RIGHT", 4, 0)
-  ui.delete = button(window, "Delete", 70, function()
+  ui.delete = button(window, L["Delete"], 70, function()
     local name = selected
-    confirm("NYTEFRAMES_DELETE", "Delete the Nyte Frames profile '" .. name .. "'? This can't be undone.", function()
-      act(function() return NF.DB.Delete(name) end, "deleted '" .. name .. "'.")
+    confirm("NYTEFRAMES_DELETE", L["Delete the Nyte Frames profile '%s'? This can't be undone."]:format(name), function()
+      act(function() return NF.DB.Delete(name) end, L["deleted '%s'."]:format(name))
     end)
   end)
   ui.delete:SetPoint("LEFT", ui.rename, "RIGHT", 4, 0)
-  ui.reset = button(window, "Reset", 70, function()
+  ui.reset = button(window, L["Reset"], 70, function()
     local name = selected
-    confirm("NYTEFRAMES_RESET", "Reset the profile '" .. name .. "' to the defaults? Role overrides are kept.", function()
+    confirm("NYTEFRAMES_RESET", L["Reset the profile '%s' to the defaults? Role overrides are kept."]:format(name), function()
       if InCombatLockdown() then status("can't reset in combat.", true) return end
-      if act(function() return NF.DB.Reset(name) end, "reset '" .. name .. "' to the defaults.")
+      if act(function() return NF.DB.Reset(name) end, L["reset '%s' to the defaults."]:format(name))
           and name == NF.DB.ProfileName() then
         NF.profile.calibrated = nil
         NF.DB.Changed("reset")
@@ -278,15 +279,15 @@ local function build()
   sep:SetVertexColor(1, 1, 1, 0.08)
   sep:SetPoint("TOPLEFT", 14, -246)
   sep:SetSize(442, 1)
-  local ieTitle = label(window, "Import / export (exact settings)", 12)
+  local ieTitle = label(window, L["Import / export (exact settings)"], 12)
   ieTitle:SetPoint("TOPLEFT", 14, -256)
 
-  ui.roles = checkbox(window, "Export role overrides too",
+  ui.roles = checkbox(window, L["Export role overrides too"],
     function() return P.includeRoles end, function(v) P.includeRoles = v end)
   ui.roles:SetPoint("TOPLEFT", 14, -278)
-  ui.export = button(window, "Export current", 110, P.DoExport)
+  ui.export = button(window, L["Export current"], 110, P.DoExport)
   ui.export:SetPoint("TOPLEFT", 226, -278)
-  ui.check = button(window, "Check import", 110, P.DoCheck)
+  ui.check = button(window, L["Check import"], 110, P.DoCheck)
   ui.check:SetPoint("LEFT", ui.export, "RIGHT", 6, 0)
 
   ui.text = buildTextBox(window, 442, 110)
@@ -297,9 +298,9 @@ local function build()
   ui.preview:SetWidth(442)
   ui.preview:SetJustifyV("TOP")
 
-  ui.apply = button(window, "Apply to current profile", 214, function() P.DoApply("current") end)
+  ui.apply = button(window, L["Apply to current profile"], 214, function() P.DoApply("current") end)
   ui.apply:SetPoint("BOTTOMLEFT", 14, 36)
-  ui.saveNew = button(window, "Save as new profile (Name)", 214, function() P.DoApply("new") end)
+  ui.saveNew = button(window, L["Save as new profile (Name)"], 214, function() P.DoApply("new") end)
   ui.saveNew:SetPoint("LEFT", ui.apply, "RIGHT", 14, 0)
 
   ui.status = label(window, "", 10)
@@ -308,12 +309,12 @@ local function build()
 end
 
 function P.Show(mode)
-  if InCombatLockdown() then NF.Print("profiles open after combat.") return end
+  if InCombatLockdown() then NF.Print(L["profiles open after combat."]) return end
   if not window then build() end
   selected = NF.DB.ProfileName()
   ui.name:SetText("")
   ui.roles:Refresh()
-  status(mode == "import" and "paste a NYTEFRAMES1: string below (Ctrl+V), then press Check import." or "")
+  status(mode == "import" and L["paste a NYTEFRAMES1: string below (Ctrl+V), then press Check import."] or "")
   window:Show()
   P.RefreshList()
   if mode == "export" then P.DoExport()

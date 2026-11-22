@@ -1,7 +1,7 @@
 -- Init.lua: namespace, event bus, slash commands.
 local ADDON, NF = ...
 NF.ADDON = ADDON
-NF.VERSION = "0.15.0"
+NF.VERSION = "0.16.0"
 _G.NyteFrames = NF -- for /dump and other addons; nothing secure reads it
 
 local PREFIX = "|cff8a7dffNyte Frames|r: "
@@ -91,25 +91,34 @@ end)
 local commands = {}
 NF.commands = commands
 
+-- command, description (descriptions are translated; L is filled after
+-- this file loads, so it's looked up when help runs)
+NF.HELP = {
+  { "/nf", "open settings" },
+  { "/nf unlock | lock", "move and resize frames" },
+  { "/nf role [name] tank|healer|dps|auto", "set a role (Shift+right-click a frame too)" },
+  { "/nf role refresh", "re-check everyone's talents (after a respec)" },
+  { "/nf probe", "probe status (it records automatically)" },
+  { "/nf probe now", "take an out-of-combat snapshot now" },
+  { "/nf probe inspect", "inspect your target's talents (role detection test)" },
+  { "/nf probe off | on", "stop / resume recording" },
+  { "/nf probe reset", "clear everything the probe recorded" },
+  { "/nf auras", "status of the Blizzard aura icons on Nyte frames" },
+  { "/nf errors", "list Lua errors Nyte Frames caught" },
+  { "/nf blizzard", "which Blizzard frames are hidden / showing" },
+  { "/nf perf [seconds]", "profile Nyte Frames' CPU use (default 60s)" },
+  { "/nf profiles", "profiles window (switch, copy, rename, delete, reset)" },
+  { "/nf profile [name]", "show the active profile, or switch to [name]" },
+  { "/nf export | import", "share exact settings as a NYTEFRAMES1: string" },
+}
+
 commands.help = function()
-  NF.Print("v" .. NF.VERSION .. " commands:")
-  print("  /nf                  - open settings")
-  print("  /nf unlock | lock    - move and resize frames")
-  print("  /nf role [name] tank|healer|dps|auto - set a role (Shift+right-click a frame too)")
-  print("  /nf role refresh     - re-check everyone's talents (after a respec)")
-  print("  /nf probe            - probe status (it records automatically)")
-  print("  /nf probe now        - take an out-of-combat snapshot now")
-  print("  /nf probe inspect    - inspect your target's talents (role detection test)")
-  print("  /nf probe off | on   - stop / resume recording")
-  print("  /nf probe reset      - clear everything the probe recorded")
-  print("  /nf auras            - status of the Blizzard aura icons on Nyte frames")
-  print("  /nf errors           - list Lua errors Nyte Frames caught")
-  print("  /nf blizzard         - which Blizzard frames are hidden / showing")
-  print("  /nf perf [seconds]   - profile Nyte Frames' CPU use (default 60s)")
-  print("  /nf profiles         - profiles window (switch, copy, rename, delete, reset)")
-  print("  /nf profile [name]   - show the active profile, or switch to [name]")
-  print("  /nf export | import  - share exact settings as a NYTEFRAMES1: string")
-  print("Type /reload to save probe data.")
+  local L = NF.L
+  NF.Print(L["v%s commands:"]:format(NF.VERSION))
+  for _, h in ipairs(NF.HELP) do
+    print(string.format("  %-20s - %s", h[1], L[h[2]]))
+  end
+  print(L["Type /reload to save probe data."])
 end
 
 commands.config = function() NF.Settings.Toggle() end
@@ -122,8 +131,8 @@ commands.lock = function() NF.EditMode.Lock() end
 commands.settings = commands.config
 
 commands.errors = function()
-  if #NF.errors == 0 then NF.Print("no errors caught this session.") return end
-  NF.Print(#NF.errors .. " error(s) this session:")
+  if #NF.errors == 0 then NF.Print(NF.L["no errors caught this session."]) return end
+  NF.Print(NF.L["%d error(s) this session:"]:format(#NF.errors))
   for i = 1, math.min(#NF.errors, 10) do print("  " .. NF.errors[i]) end
 end
 
@@ -131,18 +140,18 @@ commands.profile = function(rest)
   rest = (rest or ""):gsub("^%s+", ""):gsub("%s+$", "")
   if rest ~= "" then
     if not NyteFramesDB.profiles[rest] then
-      NF.Print("no profile named '" .. rest .. "'. Profiles: " .. table.concat(NF.DB.List(), ", "))
+      NF.Print(NF.L["no profile named '%s'."]:format(rest) .. " " .. NF.L["Profiles: %s"]:format(table.concat(NF.DB.List(), ", ")))
       return
     end
-    if InCombatLockdown() then NF.Print("can't switch profiles in combat.") return end
+    if InCombatLockdown() then NF.Print(NF.L["can't switch profiles in combat."]) return end
     NF.DB.Use(rest)
     NF.DB.Changed("switched to '" .. rest .. "'")
-    NF.Print("now using profile '" .. rest .. "'.")
+    NF.Print(NF.L["now using profile '%s'."]:format(rest))
     return
   end
-  NF.Print("profile '" .. NF.DB.ProfileName() .. "', schema " .. tostring(NF.DB.SCHEMA) ..
-    (NF.DB.restoredFromCharacter and " (restored from the per-character backup)" or "") ..
-    ". Profiles: " .. table.concat(NF.DB.List(), ", "))
+  NF.Print(NF.L["profile '%s', schema %s"]:format(NF.DB.ProfileName(), tostring(NF.DB.SCHEMA)) ..
+    (NF.DB.restoredFromCharacter and (" " .. NF.L["(restored from the per-character backup)"]) or "") ..
+    ". " .. NF.L["Profiles: %s"]:format(table.concat(NF.DB.List(), ", ")))
 end
 commands.profiles = function() NF.Profiles.Toggle() end
 commands.export = function() NF.Profiles.Show("export") end
@@ -150,7 +159,7 @@ commands.import = function() NF.Profiles.Show("import") end
 
 commands.perf = function(rest) NF.Perf.Command(rest) end
 commands.blizzard = function()
-  NF.Print("Blizzard frames:")
+  NF.Print(NF.L["Blizzard frames:"])
   for _, line in ipairs(NF.Blizzard.Status()) do print(line) end
 end
 
@@ -166,7 +175,7 @@ local function slash(msg)
   local ok, err = pcall(fn, rest or "")
   if not ok then
     NF.Error("/nf " .. cmd, err)
-    NF.Print("that command hit an error: " .. tostring(err))
+    NF.Print(NF.L["that command hit an error: %s"]:format(tostring(err)))
   end
 end
 

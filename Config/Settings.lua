@@ -3,6 +3,7 @@
 -- Widgets are built from plain frames (no option templates) so nothing here
 -- depends on Blizzard template changes.
 local _, NF = ...
+local L = NF.L
 local Settings = {}
 NF.Settings = Settings
 
@@ -11,15 +12,15 @@ local window, current
 local widgets = {}
 
 Settings.PAGES = {
-  { key = "player", label = "Player" },
-  { key = "target", label = "Target" },
-  { key = "targettarget", label = "ToT" },
-  { key = "targettargettarget", label = "ToToT" },
-  { key = "party", label = "Party" },
-  { key = "raid", label = "Raid" },
-  { key = "boss", label = "Boss" },
-  { key = "focus", label = "Focus" },
-  { key = "pet", label = "Pet" },
+  { key = "player", label = L["Player"] },
+  { key = "target", label = L["Target"] },
+  { key = "targettarget", label = L["ToT"] },
+  { key = "targettargettarget", label = L["ToToT"] },
+  { key = "party", label = L["Party"] },
+  { key = "raid", label = L["Raid"] },
+  { key = "boss", label = L["Boss"] },
+  { key = "focus", label = L["Focus"] },
+  { key = "pet", label = L["Pet"] },
 }
 
 local function label(parent, text, size)
@@ -170,7 +171,7 @@ local function build()
   title:SetPoint("TOPLEFT", 14, -12)
   local close = button(window, "X", 22, function() window:Hide() end)
   close:SetPoint("TOPRIGHT", -8, -8)
-  local profiles = button(window, "Profiles / Import", 130, function()
+  local profiles = button(window, L["Profiles / Import"], 130, function()
     window:Hide()
     NF.Profiles.Show()
   end)
@@ -178,11 +179,11 @@ local function build()
 
   -- general section
   local y = -44
-  widgets.textMode = cycle(window, "Text (non-player)", { { "percent", "Percent" }, { "number", "Number" }, { "both", "# and %" } },
+  widgets.textMode = cycle(window, L["Text (non-player)"], { { "percent", L["Percent"] }, { "number", L["Number"] }, { "both", L["# and %"] } },
     function() return NF.profile.general.textMode end,
     function(v) NF.profile.general.textMode = v NF.Frames.Refresh() end)
   widgets.textMode:SetPoint("TOPLEFT", 14, y)
-  widgets.border = cycle(window, "Border",
+  widgets.border = cycle(window, L["Border"],
     { { 1, "1 px" }, { 2, "2 px" }, { 3, "3 px" }, { 4, "4 px" } },
     function() return NF.UnitButton.BorderSize() end,
     function(v)
@@ -194,11 +195,11 @@ local function build()
   widgets.border.button:ClearAllPoints()
   widgets.border.button:SetPoint("LEFT", 60, 0)
   widgets.border:SetPoint("TOPLEFT", 270, y)
-  widgets.abbrev = checkbox(window, "Abbreviate numbers (12.3k)",
+  widgets.abbrev = checkbox(window, L["Abbreviate numbers (12.3k)"],
     function() return NF.profile.general.abbreviate end,
     function(v) NF.profile.general.abbreviate = v NF.Frames.Refresh() end)
   widgets.abbrev:SetPoint("TOPLEFT", 14, y - 28)
-  widgets.blizzAuras = checkbox(window, "Blizzard aura icons (work in combat)",
+  widgets.blizzAuras = checkbox(window, L["Blizzard aura icons (work in combat)"],
     function() return NF.profile.general.blizzardAuras end,
     function(v) NF.profile.general.blizzardAuras = v NF.Blizzard.PromptReload() end)
   widgets.blizzAuras:SetPoint("TOPLEFT", 260, y - 28)
@@ -214,7 +215,7 @@ local function build()
   widgets.tabs = tabs
 
   local py = y - 104
-  widgets.enabled = checkbox(window, "Enabled (replaces the Blizzard frame)",
+  widgets.enabled = checkbox(window, L["Enabled (replaces the Blizzard frame)"],
     function() return cfg().enabled end,
     function(v) cfg().enabled = v NF.Blizzard.PromptReload() end)
   widgets.enabled:SetPoint("TOPLEFT", 14, py)
@@ -224,38 +225,38 @@ local function build()
     widgets[name] = checkbox(window, text, get, function(v) set(v) changed() end)
     widgets[name]:SetPoint("TOPLEFT", 270, py - yOff)
   end
-  extra("castBar", "Cast bar", function() return cfg().castBar end,
+  extra("castBar", L["Cast bar"], function() return cfg().castBar end,
     function(v) cfg().castBar = v NF.CastBar.Apply() end, 34)
-  extra("buffs", "Buffs", function() return cfg().auras.buffs end,
+  extra("buffs", L["Buffs"], function() return cfg().auras.buffs end,
     function(v) cfg().auras.buffs = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end, 56)
-  extra("debuffs", "Debuffs", function() return cfg().auras.debuffs end,
+  extra("debuffs", L["Debuffs"], function() return cfg().auras.debuffs end,
     function(v) cfg().auras.debuffs = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end, 78)
-  extra("healPred", "Incoming heals", function() return cfg().overlays.healPrediction end,
+  extra("healPred", L["Incoming heals"], function() return cfg().overlays.healPrediction end,
     function(v) cfg().overlays.healPrediction = v end, 100)
-  extra("absorbs", "Absorb shields", function() return cfg().overlays.absorbs end,
+  extra("absorbs", L["Absorb shields"], function() return cfg().overlays.absorbs end,
     function(v) cfg().overlays.absorbs = v end, 122)
-  extra("threat", "Threat border", function() return cfg().overlays.threat end,
+  extra("threat", L["Threat border"], function() return cfg().overlays.threat end,
     function(v) cfg().overlays.threat = v end, 144)
-  extra("range", "Fade when out of range", function() return cfg().overlays.rangeFade end,
+  extra("range", L["Fade when out of range"], function() return cfg().overlays.rangeFade end,
     function(v) cfg().overlays.rangeFade = v end, 166)
-  extra("roleIcon", "Role icon", function() return cfg().icons.role end,
+  extra("roleIcon", L["Role icon"], function() return cfg().icons.role end,
     function(v) cfg().icons.role = v end, 188)
-  extra("statusIcon", "Ready check / summon / res", function() return cfg().icons.status end,
+  extra("statusIcon", L["Ready check / summon / res"], function() return cfg().icons.status end,
     function(v) cfg().icons.status = v end, 210)
   local function tickSet(field)
     return function(v) cfg().manaTicks[field] = v NF.ManaTicks.Refresh() end
   end
-  extra("castLatency", "Latency on cast bar", function() return cfg().castLatency end,
+  extra("castLatency", L["Latency on cast bar"], function() return cfg().castLatency end,
     function(v) cfg().castLatency = v end, 0)
-  extra("manaTick", "Mana / energy tick spark", function() return cfg().manaTicks.ticks end, tickSet("ticks"), 0)
-  extra("fiveRule", "5-second rule spark", function() return cfg().manaTicks.fiveSecond end, tickSet("fiveSecond"), 0)
-  extra("manaCost", "Spell cost on mana bar", function() return cfg().manaTicks.cost end, tickSet("cost"), 0)
-  widgets.auraSize = slider(window, "Aura icon size", 8, 40, 1,
+  extra("manaTick", L["Mana / energy tick spark"], function() return cfg().manaTicks.ticks end, tickSet("ticks"), 0)
+  extra("fiveRule", L["5-second rule spark"], function() return cfg().manaTicks.fiveSecond end, tickSet("fiveSecond"), 0)
+  extra("manaCost", L["Spell cost on mana bar"], function() return cfg().manaTicks.cost end, tickSet("cost"), 0)
+  widgets.auraSize = slider(window, L["Aura icon size"], 8, 40, 1,
     function() return cfg().auras.size end,
     function(v) cfg().auras.size = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end)
   widgets.auraSize:SetPoint("TOPLEFT", 270, py - 232)
   widgets.auraSize:SetWidth(170)
-  widgets.auraMax = slider(window, "Max auras", 0, 20, 1,
+  widgets.auraMax = slider(window, L["Max auras"], 0, 20, 1,
     function() return cfg().auras.max end,
     function(v) cfg().auras.max = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end)
   widgets.auraMax:SetPoint("TOPLEFT", 270, py - 274)
@@ -273,87 +274,87 @@ local function build()
     NF.AuraBridge.ScheduleGroup()
     pcall(NF.AuraBridge.LayoutTarget)
   end
-  local hlTitle = label(hl, "Debuff highlight", 13)
+  local hlTitle = label(hl, L["Debuff highlight"], 13)
   hlTitle:SetPoint("TOPLEFT", 12, -10)
   hl.title = hlTitle
   local hlClose = button(hl, "X", 22, function() hl:Hide() end)
   hlClose:SetPoint("TOPRIGHT", -6, -6)
-  widgets.hlOn = checkbox(hl, "Color frames with a dispellable debuff",
+  widgets.hlOn = checkbox(hl, L["Color frames with a dispellable debuff"],
     function() return cfg().overlays.dispelHighlight end,
     function(v) cfg().overlays.dispelHighlight = v auraChanged() end)
   widgets.hlOn:SetPoint("TOPLEFT", 12, -36)
-  widgets.hlMode = cycle(hl, "Which debuffs",
-    { { "mine", "I can dispel" }, { "all", "Any type" } },
+  widgets.hlMode = cycle(hl, L["Which debuffs"],
+    { { "mine", L["I can dispel"] }, { "all", L["Any type"] } },
     function() return cfg().overlays.dispelMode end,
     function(v) cfg().overlays.dispelMode = v auraChanged() end)
   widgets.hlMode:SetPoint("TOPLEFT", 12, -62)
-  widgets.hlColor = cycle(hl, "Color",
-    { { "debuff", "Debuff type" }, { "black", "Dark" } },
+  widgets.hlColor = cycle(hl, L["Color"],
+    { { "debuff", L["Debuff type"] }, { "black", L["Dark"] } },
     function() return cfg().overlays.dispelColor end,
     function(v) cfg().overlays.dispelColor = v auraChanged() end)
   widgets.hlColor:SetPoint("TOPLEFT", 12, -88)
-  widgets.hlPulse = checkbox(hl, "Pulse",
+  widgets.hlPulse = checkbox(hl, L["Pulse"],
     function() return cfg().overlays.dispelPulse end,
     function(v) cfg().overlays.dispelPulse = v auraChanged() end)
   widgets.hlPulse:SetPoint("TOPLEFT", 12, -116)
-  widgets.hlBorder = checkbox(hl, "Moving border",
+  widgets.hlBorder = checkbox(hl, L["Moving border"],
     function() return cfg().overlays.dispelBorder end,
     function(v) cfg().overlays.dispelBorder = v auraChanged() end)
   widgets.hlBorder:SetPoint("TOPLEFT", 12, -138)
-  widgets.hlBig = checkbox(hl, "Bigger boss / role debuffs",
+  widgets.hlBig = checkbox(hl, L["Bigger boss / role debuffs"],
     function() return cfg().auras.bigBossDebuffs end,
     function(v) cfg().auras.bigBossDebuffs = v auraChanged() end)
   widgets.hlBig:SetPoint("TOPLEFT", 12, -166)
-  widgets.hlOnlyDispel = checkbox(hl, "Only show debuffs I can dispel",
+  widgets.hlOnlyDispel = checkbox(hl, L["Only show debuffs I can dispel"],
     function() return cfg().auras.onlyDispellable end,
     function(v) cfg().auras.onlyDispellable = v auraChanged() end)
   widgets.hlOnlyDispel:SetPoint("TOPLEFT", 12, -188)
-  local hlNote = label(hl, "|cff888888By debuff type, not spell name: the game hides which spell it is from addons in combat.|r", 10)
+  local hlNote = label(hl, L["|cff888888By debuff type, not spell name: the game hides which spell it is from addons in combat.|r"], 10)
   hlNote:SetWidth(286)
   hl.note = hlNote
-  widgets.hlButton = button(window, "Debuff highlight...", 170, function()
+  widgets.hlButton = button(window, L["Debuff highlight..."], 170, function()
     hl:SetShown(not hl:IsShown())
     Settings.Show(current)
   end)
   widgets.hlButton:SetPoint("TOPLEFT", 270, py - 306)
-  widgets.width = slider(window, "Width", 40, 500, 1,
+  widgets.width = slider(window, L["Width"], 40, 500, 1,
     function() return cfg().width end, function(v) cfg().width = v changed() end)
   widgets.width:SetPoint("TOPLEFT", 14, py - 46)
-  widgets.height = slider(window, "Height", 12, 200, 1,
+  widgets.height = slider(window, L["Height"], 12, 200, 1,
     function() return cfg().height end, function(v) cfg().height = v changed() end)
   widgets.height:SetPoint("TOPLEFT", 14, py - 88)
-  widgets.power = slider(window, "Power bar height % (0 hides it)", 0, 50, 1,
+  widgets.power = slider(window, L["Power bar height % (0 hides it)"], 0, 50, 1,
     function() return cfg().powerHeightPct end, function(v) cfg().powerHeightPct = v changed() end)
   widgets.power:SetPoint("TOPLEFT", 14, py - 130)
-  widgets.frameText = cycle(window, "Text on this frame",
-    { { "global", "Use global" }, { "percent", "Percent" }, { "number", "Number" }, { "both", "# and %" } },
+  widgets.frameText = cycle(window, L["Text on this frame"],
+    { { "global", L["Use global"] }, { "percent", L["Percent"] }, { "number", L["Number"] }, { "both", L["# and %"] } },
     function() return cfg().textMode or "global" end,
     function(v) cfg().textMode = (v ~= "global") and v or nil changed() end)
   widgets.frameText:SetPoint("TOPLEFT", 14, py - 160)
-  widgets.nameColor = cycle(window, "Name color",
-    { { "white", "White" }, { "black", "Black" }, { "gold", "Gold" }, { "gray", "Gray" },
-      { "class", "Class" }, { "reaction", "Reaction" } },
+  widgets.nameColor = cycle(window, L["Name color"],
+    { { "white", L["White"] }, { "black", L["Black"] }, { "gold", L["Gold"] }, { "gray", L["Gray"] },
+      { "class", L["Class"] }, { "reaction", L["Reaction"] } },
     function() return cfg().nameColor end, function(v) cfg().nameColor = v changed() end)
   widgets.nameColor:SetPoint("TOPLEFT", 14, py - 188)
-  widgets.powerText = checkbox(window, "Show power text",
+  widgets.powerText = checkbox(window, L["Show power text"],
     function() return cfg().showPowerText end, function(v) cfg().showPowerText = v changed() end)
   widgets.powerText:SetPoint("TOPLEFT", 14, py - 218)
-  widgets.reset = button(window, "Reset this frame", 140, function()
+  widgets.reset = button(window, L["Reset this frame"], 140, function()
     NF.Frames.ResetFrame(current)
     Settings.Show(current)
   end)
   widgets.reset:SetPoint("TOPLEFT", 14, py - 254)
-  widgets.unlock = button(window, "Unlock frames", 140, function()
+  widgets.unlock = button(window, L["Unlock frames"], 140, function()
     window:Hide()
     NF.EditMode.Toggle()
   end)
   widgets.unlock:SetPoint("LEFT", widgets.reset, "RIGHT", 10, 0)
-  widgets.columns = slider(window, "Raid columns per row (more wrap above)", 1, 8, 1,
+  widgets.columns = slider(window, L["Raid columns per row (more wrap above)"], 1, 8, 1,
     function() return cfg().maxColumnsPerRow or 8 end,
     function(v) cfg().maxColumnsPerRow = v NF.Raid.Apply() end)
   widgets.columns:SetPoint("TOPLEFT", 14, py - 302)
 
-  local note = label(window, "|cff888888Blizzard's target-of-target lives inside its target frame, so it stays hidden while Nyte Target is on. Unlock (/nf unlock) to drag, resize from the corner, nudge with arrow keys and use the grid.|r", 10)
+  local note = label(window, L["|cff888888Blizzard's target-of-target lives inside its target frame, so it stays hidden while Nyte Target is on. Unlock (/nf unlock) to drag, resize from the corner, nudge with arrow keys and use the grid.|r"], 10)
   note:SetWidth(470)
   window.note = note
   window.columnsTop = py - 32
@@ -365,10 +366,10 @@ end
 -- Two columns that stack only what's shown on this page (no gaps, no
 -- overlap), then the buttons and the note under the taller one; the window
 -- grows to fit. Step heights: checkbox 22, cycle 28, slider 44 (label above).
-local LEFT_COL = { { "width", "slider" }, { "height", "slider" }, { "power", "slider" },
-  { "frameText", "cycle" }, { "nameColor", "cycle" }, { "powerText", "check" }, { "columns", "slider" } }
-local RIGHT_COL = { { "castBar", "check" }, { "buffs", "check" }, { "debuffs", "check" },
-  { "healPred", "check" }, { "absorbs", "check" }, { "threat", "check" }, { "range", "check" },
+local LEFT_COL = { { "width", L["slider"] }, { "height", L["slider"] }, { "power", L["slider"] },
+  { "frameText", "cycle" }, { "nameColor", "cycle" }, { "powerText", "check" }, { "columns", L["slider"] } }
+local RIGHT_COL = { { "castBar", "check" }, { "buffs", L["check"] }, { "debuffs", L["check"] },
+  { "healPred", "check" }, { "absorbs", L["check"] }, { "threat", L["check"] }, { "range", L["check"] },
   { "roleIcon", "check" }, { "statusIcon", "check" },
   { "castLatency", "check" }, { "manaTick", "check" }, { "fiveRule", "check" }, { "manaCost", "check" }, { "gap", 10 }, { "auraSize", "slider" },
   { "auraMax", "slider" }, { "hlButton", "button" } }
@@ -452,7 +453,7 @@ function Settings.Show(key)
   -- frame coloring only on group frames; bigger / only-dispellable apply to all icons
   local pageLabel = current
   for _, pg in ipairs(Settings.PAGES) do if pg.key == current then pageLabel = pg.label end end
-  widgets.hlPanel.title:SetText("Debuff highlight: " .. pageLabel)
+  widgets.hlPanel.title:SetText(L["Debuff highlight: %s"]:format(pageLabel))
   for _, n in ipairs({ "hlOn", "hlMode", "hlColor", "hlPulse", "hlBorder" }) do widgets[n]:SetShown(group) end
   local hy = -36
   for _, it in ipairs({ { "hlOn", 26 }, { "hlMode", 26 }, { "hlColor", 28 }, { "hlPulse", 22 },

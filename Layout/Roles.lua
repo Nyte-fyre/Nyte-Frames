@@ -273,7 +273,7 @@ function Roles.Init()
       Roles.autoInspect = false
       wipe(queue)
       pending = nil
-      NF.Print("the client blocked automatic inspecting; roles now come from group roles, raid flags, class and your overrides.")
+      NF.Print(NF.L["the client blocked automatic inspecting; roles now come from group roles, raid flags, class and your overrides."])
     end
   end
   NF.On("ADDON_ACTION_BLOCKED", blocked)

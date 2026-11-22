@@ -101,12 +101,12 @@ end
 function Blizzard.PromptReload(text)
   if StaticPopupDialogs and StaticPopup_Show then
     StaticPopupDialogs.NYTEFRAMES_RELOAD = StaticPopupDialogs.NYTEFRAMES_RELOAD or {
-      button1 = "Reload UI", button2 = "Later",
+      button1 = NF.L["Reload UI"], button2 = NF.L["Later"],
       OnAccept = function() ReloadUI() end,
       timeout = 0, whileDead = true, hideOnEscape = true,
     }
-    StaticPopupDialogs.NYTEFRAMES_RELOAD.text = text or "Nyte Frames: reload the UI to swap between Nyte and Blizzard frames?"
+    StaticPopupDialogs.NYTEFRAMES_RELOAD.text = text or NF.L["Nyte Frames: reload the UI to swap between Nyte and Blizzard frames?"]
     if pcall(StaticPopup_Show, "NYTEFRAMES_RELOAD") then return end
   end
-  NF.Print("type /reload to apply.")
+  NF.Print(NF.L["type /reload to apply."])
 end

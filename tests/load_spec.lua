@@ -1175,6 +1175,43 @@ do
   ns.Skin.Masque = real
 end
 
+-- localization: English fallback, a locale file fills L, the template parses
+do
+  local L = ns.L
+  check(L["some string nobody translated"] == "some string nobody translated", "missing translation falls back to English")
+  check(ns.NewLocale("deDE") == nil, "other locales' files skip themselves")
+  check(ns.NewLocale("enUS") == nil, "English needs no locale file")
+  local tpl = readFile(root .. "/Locales/_template.lua")
+  local saved = ns.LOCALE
+  ns.LOCALE = "xxXX"
+  local chunk = loadstring(tpl, "@Locales/_template.lua")
+  check(chunk, "translation template is valid Lua")
+  if chunk then chunk("NyteFrames", ns) end
+  check(rawget(L, "Offline") == "Offline" and rawget(L, "Reset all frames") == "Reset all frames", "template fills every key with itself")
+  local n = 0
+  for k, v in pairs(L) do
+    n = n + 1
+    local _, ka = k:gsub("%%[sd]", "")
+    local _, va = v:gsub("%%[sd]", "")
+    check(ka == va, "placeholders kept: " .. k)
+  end
+  check(n > 150, "template covers the UI strings (" .. n .. ")")
+  -- a real translation shows up in the UI
+  rawset(L, "Offline", "Getrennt")
+  local printed = {}
+  local realPrint = print
+  print = function(s) printed[#printed + 1] = s end
+  rawset(L, "list Lua errors Nyte Frames caught", "Fehlerliste")
+  SlashCmdList.NYTEFRAMES("help")
+  print = realPrint
+  local found = false
+  for _, s in ipairs(printed) do if tostring(s):find("Fehlerliste", 1, true) then found = true end end
+  check(found, "slash help uses the translation")
+  for k in pairs(L) do rawset(L, k, nil) end
+  ns.LOCALE = saved
+  check(L["Offline"] == "Offline", "translations cleared after the test")
+end
+
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
 
 io.write(string.format("load_spec: %s (%d failure(s))\n", failed == 0 and "ok" or "FAILED", failed))

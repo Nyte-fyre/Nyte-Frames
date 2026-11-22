@@ -9,6 +9,7 @@
 -- validated into a complete new profile table first; only then is anything
 -- touched, in one swap. DB.DEFAULTS is the reference for every type check.
 local _, NF = ...
+local L = NF.L
 local IE = {}
 NF.ImportExport = IE
 
@@ -190,32 +191,32 @@ end
 ---------------------------------------------------------------------------
 function IE.Decode(str)
   if not (LibSerialize and LibDeflate) then return nil, "LibSerialize/LibDeflate missing" end
-  if type(str) ~= "string" then return nil, "paste a Nyte Frames string first" end
+  if type(str) ~= "string" then return nil, L["paste a Nyte Frames string first"] end
   str = str:gsub("%s+", "")
-  if str == "" then return nil, "paste a Nyte Frames string first" end
+  if str == "" then return nil, L["paste a Nyte Frames string first"] end
   local fmt, body = str:match("^" .. IE.PREFIX .. "(%d+):(.+)$")
-  if not fmt then return nil, "this isn't a Nyte Frames string (it should start with " .. IE.PREFIX .. IE.FORMAT .. ":)" end
+  if not fmt then return nil, L["this isn't a Nyte Frames string (it should start with %s)"]:format(IE.PREFIX .. IE.FORMAT .. ":") end
   if tonumber(fmt) ~= IE.FORMAT then
-    return nil, "this string uses format " .. fmt .. "; this version of Nyte Frames reads format " .. IE.FORMAT .. ". Update the addon."
+    return nil, L["this string uses format %s; this version of Nyte Frames reads format %s. Update the addon."]:format(tostring(fmt), tostring(IE.FORMAT))
   end
   local packed = LibDeflate:DecodeForPrint(body)
-  if not packed then return nil, "the string is damaged (couldn't decode it). Copy it again in full." end
+  if not packed then return nil, L["the string is damaged (couldn't decode it). Copy it again in full."] end
   local data = LibDeflate:DecompressDeflate(packed)
-  if not data then return nil, "the string is damaged (couldn't unpack it). Copy it again in full." end
+  if not data then return nil, L["the string is damaged (couldn't unpack it). Copy it again in full."] end
   local ok, payload = LibSerialize:Deserialize(data)
-  if not ok or type(payload) ~= "table" then return nil, "the string is damaged (couldn't read the settings)." end
-  if payload.addon ~= "NyteFrames" then return nil, "this string isn't from Nyte Frames." end
+  if not ok or type(payload) ~= "table" then return nil, L["the string is damaged (couldn't read the settings)."] end
+  if payload.addon ~= "NyteFrames" then return nil, L["this string isn't from Nyte Frames."] end
   local schema = payload.schema
-  if not finite(schema) or schema < 1 then return nil, "the string has no valid settings version." end
+  if not finite(schema) or schema < 1 then return nil, L["the string has no valid settings version."] end
   if schema > NF.DB.SCHEMA then
-    return nil, "these settings come from a newer Nyte Frames (settings v" .. schema .. "). Update the addon first."
+    return nil, L["these settings come from a newer Nyte Frames (settings v%s). Update the addon first."]:format(tostring(schema))
   end
-  if type(payload.profile) ~= "table" then return nil, "the string has no settings in it." end
+  if type(payload.profile) ~= "table" then return nil, L["the string has no settings in it."] end
   local profile = NF.DB.Copy(payload.profile)
   local mok, merr = pcall(NF.DB.Migrate, profile, schema)
-  if not mok then return nil, "couldn't upgrade these older settings: " .. tostring(merr) end
+  if not mok then return nil, L["couldn't upgrade these older settings: %s"]:format(tostring(merr)) end
   local clean, err, dropped = IE.ValidateProfile(profile)
-  if not clean then return nil, "invalid settings: " .. err end
+  if not clean then return nil, L["invalid settings: %s"]:format(tostring(err)) end
   local name = type(payload.name) == "string" and payload.name:sub(1, 32) or nil
   return {
     profile = clean, name = name, schema = schema, dropped = dropped or 0,
@@ -227,9 +228,9 @@ end
 -- Preview: what would change versus a profile (default: the active one)
 ---------------------------------------------------------------------------
 local SECTION_LABELS = {
-  general = "general", layout = "layout", roleOverrides = "role overrides",
-  player = "player", target = "target", targettarget = "ToT", targettargettarget = "ToToT",
-  focus = "focus", pet = "pet", party = "party", raid = "raid", boss = "boss",
+  general = L["general"], layout = L["layout"], roleOverrides = L["role overrides"],
+  player = L["player"], target = L["target"], targettarget = L["ToT"], targettargettarget = L["ToToT"],
+  focus = L["focus"], pet = L["pet"], party = L["party"], raid = L["raid"], boss = L["boss"],
 }
 
 local function countDiff(a, b)
@@ -265,23 +266,24 @@ end
 
 function IE.Summary(result)
   local lines = {}
-  lines[1] = "|cff8be28bValid.|r '" .. (result.name or "?") .. "' from Nyte Frames " .. result.version ..
-    " (settings v" .. result.schema .. (result.schema < NF.DB.SCHEMA and ", upgraded" or "") .. ")."
+  lines[1] = "|cff8be28b" .. L["Valid."] .. "|r " .. (result.schema < NF.DB.SCHEMA
+    and L["'%s' from Nyte Frames %s (settings v%s, upgraded)."] or L["'%s' from Nyte Frames %s (settings v%s)."])
+    :format(result.name or "?", tostring(result.version), tostring(result.schema))
   local on = {}
   for _, key in ipairs({ "player", "target", "targettarget", "targettargettarget", "party", "raid", "boss", "focus", "pet" }) do
     if result.profile.frames[key].enabled then on[#on + 1] = SECTION_LABELS[key] end
   end
-  lines[2] = "Frames on: " .. table.concat(on, ", ")
+  lines[2] = L["Frames on: %s"]:format(table.concat(on, ", "))
   local total, parts = IE.Diff(result)
   if total == 0 then
-    lines[3] = "Same as your current profile."
+    lines[3] = L["Same as your current profile."]
   else
-    lines[3] = total .. " change(s) vs '" .. NF.DB.ProfileName() .. "': " .. table.concat(parts, ", ")
+    lines[3] = L["%d change(s) vs '%s': %s"]:format(total, NF.DB.ProfileName(), table.concat(parts, ", "))
   end
   local roles = 0
   for _ in pairs(result.profile.roleOverrides) do roles = roles + 1 end
-  lines[4] = result.hasRoles and (roles .. " role override(s) included.") or "No role overrides (yours are kept)."
-  if result.dropped > 0 then lines[4] = lines[4] .. " " .. result.dropped .. " unknown setting(s) ignored." end
+  lines[4] = result.hasRoles and L["%d role override(s) included."]:format(roles) or L["No role overrides (yours are kept)."]
+  if result.dropped > 0 then lines[4] = lines[4] .. " " .. L["%d unknown setting(s) ignored."]:format(result.dropped) end
   return table.concat(lines, "\n")
 end
 
@@ -291,8 +293,8 @@ end
 --   mode "new":     store as a new profile and switch to it
 ---------------------------------------------------------------------------
 function IE.Apply(result, mode, newName)
-  if InCombatLockdown() then return false, "can't change settings in combat." end
-  if type(result) ~= "table" or type(result.profile) ~= "table" then return false, "check the string first." end
+  if InCombatLockdown() then return false, L["can't change settings in combat."] end
+  if type(result) ~= "table" or type(result.profile) ~= "table" then return false, L["check the string first."] end
   local p = NF.DB.Copy(result.profile)
   if mode == "new" then
     local name, err = NF.DB.ValidName(newName)

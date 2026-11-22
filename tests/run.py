@@ -31,6 +31,10 @@ def main():
             continue
         if result:
             failed += int(result)
+    # the translation template must list every L["..."] key in the code
+    import subprocess
+    if subprocess.call([sys.executable, os.path.join(ROOT, "tools", "locale_keys.py"), "--check"]) != 0:
+        failed += 1
     sys.exit(1 if failed else 0)
 
 

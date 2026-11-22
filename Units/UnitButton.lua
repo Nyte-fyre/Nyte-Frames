@@ -350,11 +350,11 @@ end
 ---------------------------------------------------------------------------
 local function unitState(u)
   local connected = Plain(Try(UnitIsConnected, u))
-  if connected == false then return "Offline" end
+  if connected == false then return NF.L["Offline"] end
   local ghost = Plain(Try(UnitIsGhost, u))
-  if ghost == true then return "Ghost" end
+  if ghost == true then return NF.L["Ghost"] end
   local dead = Plain(Try(UnitIsDeadOrGhost, u))
-  if dead == true then return "Dead" end
+  if dead == true then return NF.L["Dead"] end
   return nil
 end
 
