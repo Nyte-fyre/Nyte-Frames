@@ -179,6 +179,19 @@ function AB.LayoutTarget()
   for _, key in ipairs(STRIP_KEYS) do layoutStrip(key) end
 end
 
+-- Blizzard's container only re-reads a token's auras on UNIT_AURA, combat
+-- start/end or an "update-settings" change; it ignores target swaps, so the
+-- old target's icons stayed. A new "update-settings" value forces a re-read
+-- of whoever "target" is now (plain frame: fine in combat).
+function AB.RefreshStrip(key)
+  local strip = strips[key]
+  if not (strip and anchors[strip]) then return end
+  settingsTick = settingsTick + 1
+  pcall(strip.SetAttribute, strip, "update-settings", settingsTick)
+  AB.stats.refreshes = (AB.stats.refreshes or 0) + 1
+end
+NF.On("PLAYER_TARGET_CHANGED", function() if NF.profile and enabled() then AB.RefreshStrip("target") end end)
+
 ---------------------------------------------------------------------------
 function AB.Init()
   if not enabled() then

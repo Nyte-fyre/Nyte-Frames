@@ -593,6 +593,9 @@ check(ta and ta.parent ~= tb and ta.parent._attr["max-buffs"] == 16, "target aur
 local pl = nil
 for _, a in pairs(ANCHORS) do if a.unitToken == "player" then pl = a end end
 check(pl == nil, "player auras off by default (Blizzard buff bar shows them)")
+local tick0 = ta.parent._attr["update-settings"]
+fire("PLAYER_TARGET_CHANGED")
+check(ta.parent._attr["update-settings"] ~= tick0, "a target swap makes Blizzard re-read the target strip (no stale icons)")
 -- re-sort moves the anchor with the unit
 local before = ANCHOR_N
 ns.profile.roleOverrides["Zed Pal"] = "TANK" fire("GROUP_ROSTER_UPDATE") runTimers() runTimers()
