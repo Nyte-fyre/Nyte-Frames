@@ -1,7 +1,7 @@
 -- Init.lua: namespace, event bus, slash commands.
 local ADDON, NF = ...
 NF.ADDON = ADDON
-NF.VERSION = "0.10.4"
+NF.VERSION = "0.10.5"
 _G.NyteFrames = NF -- for /dump and other addons; nothing secure reads it
 
 local PREFIX = "|cff8a7dffNyte Frames|r: "
@@ -96,6 +96,7 @@ commands.help = function()
   print("  /nf                  - open settings")
   print("  /nf unlock | lock    - move and resize frames")
   print("  /nf role [name] tank|healer|dps|auto - set a role (Shift+right-click a frame too)")
+  print("  /nf role refresh     - re-check everyone's talents (after a respec)")
   print("  /nf probe            - probe status (it records automatically)")
   print("  /nf probe now        - take an out-of-combat snapshot now")
   print("  /nf probe inspect    - inspect your target's talents (role detection test)")

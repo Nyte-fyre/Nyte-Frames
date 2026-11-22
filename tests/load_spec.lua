@@ -578,6 +578,38 @@ check(swapped == "DAMAGER" and src == "talents", "after the swap the new talents
 fire("ROLE_CHANGED_INFORM", NAMES[found], NAMES[found], "DAMAGER", "TANK")
 check(ns.Roles.Get(found) == "TANK", "picking a role again wins over older talents")
 ROLES[found] = "DAMAGER"
+-- picking Damage in the role menu beats an older Tank talent result
+NyteFramesDB.roleCache[UnitGUID(found)] = { role = "TANK", t = time() } -- from an earlier session
+fire("ROLE_CHANGED_INFORM", NAMES[found], NAMES[found], "TANK", "DAMAGER")
+local picked, psrc = ns.Roles.Get(found)
+check(picked == "DAMAGER" and psrc == "picked", "a Damage pick beats an old Tank talent result: " .. tostring(picked))
+-- an old-session result gets re-checked once
+local q0 = #inspected
+add("Respecced", "WARRIOR", "DAMAGER")
+groupSize = n
+local other = "raid" .. n
+if other then
+  NyteFramesDB.roleCache[UnitGUID(other)] = { role = "TANK", t = time() }
+  ns.Roles.Get(other)
+  local hit = false
+  for _ = 1, 60 do
+    ns.Roles.Pump()
+    local p = ns.Roles.Pending()
+    if not p then break end
+    if p.guid == UnitGUID(other) then hit = true end
+    fire("INSPECT_READY", p.guid)
+  end
+  check(hit, "an old cached result is re-inspected this session")
+end
+-- /nf role refresh queues everyone
+SlashCmdList.NYTEFRAMES("role refresh")
+check(ns.Roles.Pending() ~= nil or (function() ns.Roles.Pump() return ns.Roles.Pending() ~= nil end)(), "/nf role refresh starts re-inspecting")
+for _ = 1, 60 do
+  local p = ns.Roles.Pending()
+  if p then fire("INSPECT_READY", p.guid) end
+  ns.Roles.Pump()
+  if not ns.Roles.Pending() then break end
+end
 -- manual override via /nf role
 SlashCmdList.NYTEFRAMES("role D1 tank")
 check(ns.profile.roleOverrides.D1 == "TANK", "/nf role sets override")

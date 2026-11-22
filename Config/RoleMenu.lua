@@ -46,11 +46,16 @@ end
 
 function RoleMenu.Command(rest)
   rest = rest or ""
+  if rest:lower():match("^%s*refresh%s*$") then
+    local n = NF.Roles.RefreshAll()
+    NF.Print(string.format("re-checking talents for %d group member(s) (out of combat, about 2s each).", n))
+    return
+  end
   local word = rest:match("(%S+)%s*$")
   local role = word and WORDS[word:lower()]
   local name = rest:gsub("%s*%S+%s*$", "")
   if role == nil then
-    NF.Print("usage: /nf role [name] tank|healer|dps|auto  (no name = your target)")
+    NF.Print("usage: /nf role [name] tank|healer|dps|auto  (no name = your target), or /nf role refresh")
     return
   end
   if name == "" then name = NF.Roles.NameOf("target") end

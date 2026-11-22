@@ -31,6 +31,9 @@ local queue, queued, pending = {}, {}, nil
 local lastInspect = 0
 local roster = {}           -- [unit] = { mainTank = bool } from the last roster scan
 local assignedSeen = {}     -- [guid] = { role, seq, name }: when the group role last changed
+local picks = {}            -- [name] = { role, seq }: a role someone picked this session
+local swapping = {}         -- [guid] = true: re-inspect after a spec swap is pending
+local refreshed = {}        -- [guid] = true: an old cached result was re-checked this session
 local seq = 0               -- session order of role picks vs. inspects
 local function nextSeq() seq = seq + 1 return seq end
 
@@ -63,6 +66,13 @@ function Roles.Get(unit)
   local assigned = NF.Compat.Role(unit)
   local guid = guidOf(unit)
   local c = guid and NyteFramesDB and cache()[guid]
+  -- a role picked in the role menu this session (Damage included: then the
+  -- game's DAMAGER is a real answer, not "nothing set"), unless talents were
+  -- read after it
+  local pick = name and picks[name]
+  if pick and pick.role == assigned and not (c and c.seq and c.seq > pick.seq) then
+    return assigned, "picked"
+  end
   if assigned == "TANK" or assigned == "HEALER" then
     local seen = guid and assignedSeen[guid]
     if guid and (not seen or seen.role ~= assigned) then
@@ -70,11 +80,19 @@ function Roles.Get(unit)
       assignedSeen[guid] = seen
     end
     -- talents read after the role was picked (a spec swap) beat the stale role
-    if c and c.role and c.seq and seen and c.seq > seen.seq then return c.role, "talents" end
+    if c and c.role and c.afterSwap and c.seq and seen and c.seq > seen.seq then return c.role, "talents" end
     return assigned, "assigned"
   end
   if roster[unit] and roster[unit].mainTank then return "TANK", "roster" end
-  if c and c.role then return c.role, "talents" end
+  if c and c.role then
+    -- a result from an earlier session may be out of date (respec): check once
+    if not c.seq and not refreshed[guid] and Roles.autoInspect then
+      refreshed[guid] = true
+      queued[guid] = nil
+      Roles.Queue(unit)
+    end
+    return c.role, "talents"
+  end
   local class = classOf(unit)
   if class and RoleRules.TREES[class] == nil then return "DAMAGER", "class" end
   if guid and Roles.autoInspect then Roles.Queue(unit) end
@@ -153,13 +171,15 @@ local function onInspectReady(_, guid)
   local p = pending
   if not p or Plain(guid) ~= p.guid then return end
   pending = nil
+  queued[p.guid] = nil -- done: a later spec swap / refresh may queue it again
   local ok, buckets = pcall(inspectBuckets)
   local class = classOf(p.unit)
   if ok and buckets and class then
     local role = RoleRules.FromTalents(class, buckets)
     if role then
       -- seq: read this session, so it can outrank an older role pick
-      cache()[p.guid] = { role = role, t = time(), seq = nextSeq() }
+      cache()[p.guid] = { role = role, t = time(), seq = nextSeq(), afterSwap = swapping[p.guid] }
+      swapping[p.guid] = nil
       Roles.Changed()
     end
   end
@@ -187,9 +207,30 @@ function Roles.SpecChanged(unit)
   local guid = guidOf(unit)
   if not guid then return end
   if NyteFramesDB then cache()[guid] = nil end
+  swapping[guid] = true
   queued[guid] = nil
   Roles.Queue(unit)
   Roles.Changed()
+end
+
+-- /nf role refresh: forget every group member's talents and inspect again.
+function Roles.RefreshAll()
+  local n = 0
+  local prefix, count = "party", 4
+  if IsInRaid() then prefix, count = "raid", 40 end
+  for i = 1, count do
+    local u = prefix .. i
+    local guid = guidOf(u)
+    if guid then
+      if NyteFramesDB then cache()[guid] = nil end
+      swapping[guid] = true -- treat like a spec swap: the result can beat a stale role
+      queued[guid] = nil
+      Roles.Queue(u)
+      n = n + 1
+    end
+  end
+  Roles.Changed()
+  return n
 end
 
 -- Manual override (nil role = back to automatic)
@@ -204,15 +245,21 @@ function Roles.Init()
   local now, maxAge = time(), Roles.CACHE_DAYS * 86400
   for guid, c in pairs(cache()) do
     if type(c) ~= "table" or not c.t or now - c.t > maxAge then cache()[guid] = nil
-    else c.seq = nil end -- last session's inspect doesn't outrank this session's roles
+    else c.seq, c.afterSwap = nil, nil end -- last session's inspect doesn't outrank this session's roles
   end
   NF.On("INSPECT_READY", onInspectReady)
   NF.On("PLAYER_SPECIALIZATION_CHANGED", function(_, unit) Roles.SpecChanged(unit) end)
   -- a role picked again (even the same one) outranks older talents
-  NF.On("ROLE_CHANGED_INFORM", function(_, changed)
+  NF.On("ROLE_CHANGED_INFORM", function(_, changed, _, _, newRole)
     changed = Plain(changed)
     if type(changed) ~= "string" then return end
     changed = changed:gsub("%-.*$", "")
+    newRole = Plain(newRole)
+    if newRole == "TANK" or newRole == "HEALER" or newRole == "DAMAGER" then
+      picks[changed] = { role = newRole, seq = nextSeq() }
+    else
+      picks[changed] = nil
+    end
     for guid, seen in pairs(assignedSeen) do
       if seen.name == changed then assignedSeen[guid] = nil end
     end
