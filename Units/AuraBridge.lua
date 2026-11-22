@@ -22,6 +22,7 @@ AB.stats = { anchors = 0, failed = 0 }
 local anchors = {}   -- [holder frame] = { id = anchorID, unit = token }
 local strips = {}    -- [frame key] = strip frame
 local settingsTick = 0
+AB.ownBuffs = {}     -- [frame key] = true while Nyte draws that strip's buffs
 
 local function enabled()
   return NF.profile.general.blizzardAuras and C_UnitAuras and C_UnitAuras.AddPrivateAuraAnchor ~= nil
@@ -79,6 +80,10 @@ local function settingsFor(key)
   a["debuff-border-scale"] = a["debuff-border-scale"] or 1
   a["buff-border-scale"] = a["buff-border-scale"] or 1
   a["power-bar-used-height"] = 0
+  if AB.ownBuffs[key] then -- Nyte's own buff row has them (out of combat)
+    a["max-buffs"] = 0
+    a["ignore-buffs"] = true
+  end
   return a, size
 end
 
@@ -160,6 +165,7 @@ local function layoutStrip(key)
   local strip = strips[key]
   if not want then
     if strip then removeAnchor(strip) strip:Hide() end
+    AB.UpdateRow(key)
     return
   end
   if not strip then
@@ -167,17 +173,172 @@ local function layoutStrip(key)
     strips[key] = strip
   end
   local size = c.auras.size or 20
-  strip:ClearAllPoints()
-  strip:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, -2 - (b.castBarSpace or 0))
   strip:SetSize(c.width, size * 2 + 2)
   strip:Show()
   AB.Attach(strip, key, key)
+  AB.UpdateRow(key) -- places the buff row, then the strip under it
 end
 
 function AB.LayoutTarget()
   if not enabled() then return end
   for _, key in ipairs(STRIP_KEYS) do layoutStrip(key) end
 end
+
+---------------------------------------------------------------------------
+-- Hybrid buffs (player / target strips)
+--
+-- Blizzard's container shows buffs by the raid-frame rule: only ones the
+-- player cast that can go on others (no Seals, nothing from other players).
+-- So out of combat, when auras can be read, Nyte draws every buff on the
+-- unit itself in a row under the frame and tells the container to skip
+-- buffs. In combat (reads throw) the row hides and the container's buffs
+-- come back. Debuffs stay Blizzard's throughout. The strip sits under the row.
+---------------------------------------------------------------------------
+local rows = {}      -- [frame key] = row frame
+local inCombat = false
+AB.rows = rows
+
+local function tooltip(icon)
+  if not (GameTooltip and icon.index) then return end
+  GameTooltip:SetOwner(icon, "ANCHOR_BOTTOMRIGHT")
+  local unit = icon:GetParent().unit
+  local shown = icon.auraID and GameTooltip.SetUnitBuffByAuraInstanceID
+    and pcall(GameTooltip.SetUnitBuffByAuraInstanceID, GameTooltip, unit, icon.auraID, "HELPFUL")
+  if not shown then pcall(GameTooltip.SetUnitAura, GameTooltip, unit, icon.index, "HELPFUL") end
+  GameTooltip:Show()
+end
+
+local function makeIcon(row, i)
+  local f = CreateFrame("Frame", nil, row)
+  f.tex = f:CreateTexture(nil, "ARTWORK")
+  f.tex:SetAllPoints()
+  f.tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  local okCd, cd = pcall(CreateFrame, "Cooldown", nil, f, "CooldownFrameTemplate")
+  if okCd and cd then
+    cd:SetAllPoints()
+    pcall(cd.SetReverse, cd, true)
+    pcall(cd.SetHideCountdownNumbers, cd, true)
+    pcall(cd.SetDrawEdge, cd, false)
+    f.cd = cd
+  end
+  f.count = f:CreateFontString(nil, "OVERLAY")
+  f.count:SetFont(NF.Media.Font(NF.profile.general.font), 10, "OUTLINE")
+  f.count:SetPoint("BOTTOMRIGHT", 1, 0)
+  f:EnableMouse(true)
+  f:SetScript("OnEnter", tooltip)
+  f:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  row.icons[i] = f
+  return f
+end
+
+-- Up to maxN helpful auras on the unit, or nil when they can't be read now.
+local function readBuffs(unit, maxN)
+  if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
+  local list = {}
+  for i = 1, 40 do
+    if #list >= maxN then break end
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HELPFUL")
+    if not ok then return nil end
+    if type(a) ~= "table" then break end
+    list[#list + 1] = { index = i, data = a }
+  end
+  return list
+end
+
+local function setIcon(f, entry, size)
+  local a = entry.data
+  f:SetSize(size, size)
+  f.index, f.auraID = entry.index, Plain(a.auraInstanceID)
+  if not pcall(f.tex.SetTexture, f.tex, a.icon) then f.tex:SetTexture(134400) end
+  local n = Plain(a.applications)
+  f.count:SetText((type(n) == "number" and n > 1) and tostring(n) or "")
+  if f.cd then
+    local dur, exp = Plain(a.duration), Plain(a.expirationTime)
+    if type(dur) == "number" and type(exp) == "number" and dur > 0 then
+      pcall(f.cd.SetCooldown, f.cd, exp - dur, dur)
+    else
+      pcall(f.cd.Clear, f.cd)
+    end
+  end
+  f:Show()
+end
+
+local function placeStrip(key, b, rowH)
+  local strip = strips[key]
+  if not strip then return end
+  strip:ClearAllPoints()
+  strip:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, -2 - (b.castBarSpace or 0) - rowH)
+end
+
+function AB.UpdateRow(key)
+  local b = NF.Frames and NF.Frames.byKey[key]
+  if not b then return end
+  local c = NF.profile.frames[key]
+  local size = c.auras.size or 20
+  local perRow = math.max(1, math.floor((c.width + 2) / (size + 2)))
+  local list
+  if enabled() and c.enabled and c.auras.buffs and not inCombat then
+    list = readBuffs(key, math.max(0, math.min(c.auras.max or 16, perRow * 2)))
+  end
+  local own = list ~= nil
+  if own ~= (AB.ownBuffs[key] == true) then
+    AB.ownBuffs[key] = own or nil
+    local strip = strips[key]
+    if strip and anchors[strip] then applySettings(strip, key) end -- Blizzard re-reads with/without buffs
+  end
+  local row = rows[key]
+  if not row then
+    if not own then placeStrip(key, b, 0) return end
+    row = CreateFrame("Frame", nil, b)
+    row.icons, row.unit = {}, key
+    rows[key] = row
+  end
+  local n = own and #list or 0
+  for i = 1, n do
+    local f = row.icons[i] or makeIcon(row, i)
+    setIcon(f, list[i], size)
+    f:ClearAllPoints()
+    local col, line = (i - 1) % perRow, math.floor((i - 1) / perRow)
+    f:SetPoint("TOPLEFT", row, "TOPLEFT", col * (size + 2), -line * (size + 2))
+  end
+  for i = n + 1, #row.icons do row.icons[i]:Hide() end
+  local rowH = (n > 0) and math.ceil(n / perRow) * (size + 2) or 0
+  row:ClearAllPoints()
+  row:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, -2 - (b.castBarSpace or 0))
+  row:SetSize(c.width, math.max(1, rowH))
+  row:SetShown(n > 0)
+  row.count = n
+  placeStrip(key, b, rowH)
+end
+
+local function allRows()
+  if not (NF.profile and enabled()) then return end
+  for _, key in ipairs(STRIP_KEYS) do
+    local ok, err = pcall(AB.UpdateRow, key)
+    if not ok then NF.Error("buff row " .. key, err) end
+  end
+end
+
+function AB.SetCombat(on)
+  inCombat = on and true or false
+  allRows()
+end
+NF.On("PLAYER_REGEN_DISABLED", function() AB.SetCombat(true) end)
+NF.On("PLAYER_REGEN_ENABLED", function() AB.SetCombat(false) end)
+
+-- UNIT_AURA for player/target (out of combat only; in combat it's Blizzard's)
+local auraEvents = CreateFrame("Frame")
+pcall(auraEvents.RegisterUnitEvent, auraEvents, "UNIT_AURA", "player", "target")
+function AB.OnAura(unit)
+  if inCombat or not NF.profile or not enabled() then return end
+  if unit ~= "player" and unit ~= "target" then return end
+  local perf = NF.Perf and NF.Perf.on
+  local t0 = perf and NF.Perf.Now()
+  local ok, err = pcall(AB.UpdateRow, unit)
+  if not ok then NF.Error("buff row " .. unit, err) end
+  if perf then NF.Perf.Add("UNIT_AURA (buff row)", NF.Perf.Now() - t0) end
+end
+auraEvents:SetScript("OnEvent", function(_, _, unit) AB.OnAura(unit) end)
 
 -- Blizzard's container only re-reads a token's auras on UNIT_AURA, combat
 -- start/end or an "update-settings" change; it ignores target swaps, so the
@@ -190,7 +351,12 @@ function AB.RefreshStrip(key)
   pcall(strip.SetAttribute, strip, "update-settings", settingsTick)
   AB.stats.refreshes = (AB.stats.refreshes or 0) + 1
 end
-NF.On("PLAYER_TARGET_CHANGED", function() if NF.profile and enabled() then AB.RefreshStrip("target") end end)
+NF.On("PLAYER_TARGET_CHANGED", function()
+  if not (NF.profile and enabled()) then return end
+  local ok, err = pcall(AB.UpdateRow, "target")
+  if not ok then NF.Error("buff row target", err) end
+  AB.RefreshStrip("target")
+end)
 
 ---------------------------------------------------------------------------
 function AB.Init()
@@ -198,6 +364,7 @@ function AB.Init()
     AB.stats.disabled = NF.profile.general.blizzardAuras and "AddPrivateAuraAnchor missing" or "off in settings"
     return
   end
+  AB.SetCombat((InCombatLockdown and InCombatLockdown()) or false)
   AB.LayoutTarget()
   AB.ScheduleGroup()
   NF.On("PLAYER_LOGOUT", function()

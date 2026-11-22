@@ -253,6 +253,7 @@ C_UnitAuras = {
   RemovePrivateAuraAnchor = function(id) ANCHORS[id] = nil end,
   GetAuraDataByIndex = function(u, i, f)
     if inCombat then error("Auras cannot be accessed when secret") end
+    if AURAS and AURAS[u] then return AURAS[u][i] end
     return { auraInstanceID = 7, spellId = 1, name = "Buff", duration = 10 }
   end,
 }
@@ -596,6 +597,33 @@ check(pl == nil, "player auras off by default (Blizzard buff bar shows them)")
 local tick0 = ta.parent._attr["update-settings"]
 fire("PLAYER_TARGET_CHANGED")
 check(ta.parent._attr["update-settings"] ~= tick0, "a target swap makes Blizzard re-read the target strip (no stale icons)")
+-- hybrid buffs: Nyte draws every buff out of combat, Blizzard's in combat
+local AB = ns.AuraBridge
+fire("PLAYER_REGEN_ENABLED") -- an earlier block left the addon in combat
+AURAS = { target = {
+  { auraInstanceID = 11, icon = 135964, applications = 1, duration = 3600, expirationTime = 4000, sourceUnit = "party1" },
+  { auraInstanceID = 12, icon = 135906, applications = 3, duration = 0, expirationTime = 0, sourceUnit = "target" },
+  { auraInstanceID = 13, icon = secret(135907), applications = secret(2), duration = secret(5), expirationTime = secret(9) },
+} }
+AB.OnAura("target")
+local trow = AB.rows.target
+check(trow and trow.count == 3 and trow._shown, "out of combat Nyte shows every target buff (others' and self-only too)")
+check(trow.icons[2].count._text == "3" and trow.icons[1].count._text == "", "stack counts only above 1")
+check(ta.parent._attr["ignore-buffs"] == true and ta.parent._attr["max-buffs"] == 0, "Blizzard skips buffs while Nyte draws them")
+local stripY = ta.parent._anchors and ta.parent._anchors.TOPLEFT
+check(stripY ~= nil, "debuff strip re-placed under the buff row")
+fire("PLAYER_REGEN_DISABLED")
+inCombat = true
+AB.OnAura("target")
+check(not trow._shown and ta.parent._attr["ignore-buffs"] == false and ta.parent._attr["max-buffs"] == 16,
+  "in combat the row hides and Blizzard's buffs come back")
+inCombat = false
+fire("PLAYER_REGEN_ENABLED")
+check(trow._shown and trow.count == 3 and ta.parent._attr["ignore-buffs"] == true, "after combat Nyte's row returns")
+AURAS.target = {}
+fire("PLAYER_TARGET_CHANGED")
+check(not trow._shown and trow.count == 0, "a target with no buffs empties the row")
+AURAS = nil
 -- re-sort moves the anchor with the unit
 local before = ANCHOR_N
 ns.profile.roleOverrides["Zed Pal"] = "TANK" fire("GROUP_ROSTER_UPDATE") runTimers() runTimers()
