@@ -9,6 +9,6 @@ ignore:
   - docs
   - Locales/_template.lua
   - README.md
-  - .github
   - CLAUDE.md
   - private
+manual-changelog: CHANGELOG.md

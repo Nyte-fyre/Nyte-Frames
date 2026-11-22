@@ -40,8 +40,7 @@ right-hand sides (keep `%s` / `%d`), and add the file to `NyteFrames.toc` after
 - `python tests/read_probe.py` summarizes the API probe data from your SavedVariables.
 - `powershell -ExecutionPolicy Bypass -File tools\install.ps1` links the repo into
   the Forever AddOns folder.
-- Releases: pushing a `v*` tag builds the zip with the BigWigs packager and uploads it
-  to CurseForge (`.github/workflows/release.yml`).
+- Releases: pushing a `v*` tag makes CurseForge package it (webhook + `.pkgmeta`).
 
 ## License
 
