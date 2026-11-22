@@ -308,6 +308,7 @@ local function makeIcon(row, i)
   f:EnableMouse(true)
   f:SetScript("OnEnter", tooltip)
   f:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  NF.Skin.Add("Buffs", f, { Icon = f.tex, Cooldown = f.cd, Count = f.count }, "Buff")
   row.icons[i] = f
   return f
 end
@@ -328,7 +329,11 @@ end
 
 local function setIcon(f, entry, size)
   local a = entry.data
-  f:SetSize(size, size)
+  if f.nfSize ~= size then
+    f:SetSize(size, size)
+    f.nfSize = size
+    NF.Skin.Resize(f)
+  end
   f.index, f.auraID = entry.index, Plain(a.auraInstanceID)
   if not pcall(f.tex.SetTexture, f.tex, a.icon) then f.tex:SetTexture(134400) end
   local n = Plain(a.applications)

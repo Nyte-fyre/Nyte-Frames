@@ -323,6 +323,24 @@ for line in readFile(root .. "/NyteFrames.toc"):gmatch("[^\r\n]+") do
   end
 end
 
+-- a fake Masque (registered after the TOC's LibStub, before login)
+local MASQUE = { groups = {} }
+do
+  local lib = LibStub:NewLibrary("Masque", 1)
+  function lib:Group(addon, name)
+    local key = addon .. ": " .. name
+    local g = MASQUE.groups[key]
+    if g then return g end
+    g = { buttons = {}, reskins = 0 }
+    function g:AddButton(btn, regions, kind)
+      self.buttons[#self.buttons + 1] = { btn = btn, regions = regions, kind = kind }
+    end
+    function g:ReSkin() self.reskins = self.reskins + 1 end
+    MASQUE.groups[key] = g
+    return g
+  end
+end
+
 ---------------------------------------------------------------------------
 -- Drive it
 ---------------------------------------------------------------------------
@@ -1132,6 +1150,29 @@ do
   for _, r in ipairs(pr and pr.rows or {}) do names[r.name] = true end
   check(names["UNIT_HEALTH (player)"] and names.PLAYER_TARGET_CHANGED, "perf rows per event and frame")
   SlashCmdList.NYTEFRAMES("blizzard")
+end
+
+-- Masque: our own icons join groups, Blizzard's aura icons don't
+do
+  local cast = MASQUE.groups["Nyte Frames: Cast Bars"]
+  check(cast and #cast.buttons > 0, "cast bar icons are handed to Masque")
+  local first = cast and cast.buttons[1]
+  check(first and first.regions.Icon and first.btn.nfSkinned == "Cast Bars", "cast icon passes its texture region")
+  check(cast and cast.reskins > 0, "cast icons re-skin after layout")
+  local buffs = MASQUE.groups["Nyte Frames: Buffs"]
+  check(buffs and #buffs.buttons > 0, "buff row icons are handed to Masque")
+  local b1 = buffs and buffs.buttons[1]
+  check(b1 and b1.regions.Icon and b1.regions.Count and b1.kind == "Buff", "buff icon passes icon/cooldown/count")
+  local n = buffs and #buffs.buttons or 0
+  ns.Skin.Add("Buffs", b1 and b1.btn, {}, "Buff")
+  check(buffs and #buffs.buttons == n, "an icon is only added once")
+  -- without Masque nothing breaks
+  local real = ns.Skin.Masque
+  ns.Skin.Masque, ns.Skin.groups = function() return nil end, {}
+  local f = CreateFrame("Frame")
+  check(ns.Skin.Add("Buffs", f, {}) == false and not f.nfSkinned, "no Masque: Add is a no-op")
+  ns.Skin.Resize(f)
+  ns.Skin.Masque = real
 end
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))
