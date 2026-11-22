@@ -9,9 +9,9 @@
 -- parent's attributes ("max-buffs", "debuff-size", ...). The API has no
 -- addon restriction, so Nyte Frames registers the same kind of anchor with
 -- its own frames as the parent:
---   party/raid: the unit button itself (same shape as Blizzard's raid frames)
---   player/target: a strip under the frame (under the cast bar)
--- Secure buttons only take attributes out of combat, so group anchors are
+--   party/raid: a plain holder frame covering the unit button
+--   player/target: a holder on a strip under the frame (under the cast bar)
+-- Each anchor gets its own holder (see AB.Attach for why). Group anchors are
 -- (re)made out of combat, when the button's unit changes.
 local _, NF = ...
 local AB = {}
@@ -81,8 +81,7 @@ local function settingsFor(key)
   a["buff-border-scale"] = a["buff-border-scale"] or 1
   a["power-bar-used-height"] = 0
   if AB.ownBuffs[key] then -- Nyte's own buff row has them (out of combat)
-    a["max-buffs"] = 0
-    a["ignore-buffs"] = true
+    a["ignore-buffs"] = true -- never max-buffs: that has to stay as reserved
   end
   return a, size
 end
@@ -95,19 +94,75 @@ local function applySettings(holder, key)
   return size
 end
 
-local function removeAnchor(holder)
-  local a = anchors[holder]
-  if a and a.id then pcall(C_UnitAuras.RemovePrivateAuraAnchor, a.id) end
-  anchors[holder] = nil
+-- Blizzard's container sets aside its icon frames once, when the anchor is
+-- added, sized by the max-* attributes at that moment, and ties its settings
+-- handler to the parent frame. Changing max-* later, or reusing a parent for
+-- the next anchor, can leave it short of frames ("UpdateSingleAuraFrame:
+-- attempt to index field '?'"). So each anchor gets its own plain holder
+-- frame covering the owner (button or strip), max-* never change on a live
+-- anchor (a change makes a new holder), and the new anchor is added before
+-- the old one is removed. Retired holders are reused only after a while.
+local SIG_KEYS = { "max-buffs", "max-debuffs", "max-dispel-debuffs", "buff-size", "debuff-size" }
+local retired = {}   -- { frame, at }
+local REUSE_AFTER = 10
+
+local function signature(key)
+  local a = settingsFor(key)
+  local parts = {}
+  for i, k in ipairs(SIG_KEYS) do parts[i] = tostring(a[k]) end
+  return table.concat(parts, "/")
 end
 
--- Register (or refresh) a container anchor: holder shows unit's auras.
-function AB.Attach(holder, unit, key)
+local function newHolder(owner)
+  local now = (GetTime and GetTime()) or 0
+  local h
+  for i, r in ipairs(retired) do
+    if now - r.at >= REUSE_AFTER then
+      h = table.remove(retired, i).frame
+      break
+    end
+  end
+  h = h or CreateFrame("Frame")
+  h:SetParent(owner)
+  h:ClearAllPoints()
+  h:SetAllPoints(owner)
+  h:Show()
+  h._owner = owner
+  AB.stats.holders = (AB.stats.holders or 0) + 1
+  return h
+end
+
+local function retire(holder)
+  holder:Hide()
+  holder:ClearAllPoints()
+  holder._owner = nil
+  retired[#retired + 1] = { frame = holder, at = (GetTime and GetTime()) or 0 }
+end
+
+local function removeAnchor(owner)
+  local a = anchors[owner]
+  anchors[owner] = nil
+  if not a then return end
+  if a.id then pcall(C_UnitAuras.RemovePrivateAuraAnchor, a.id) end
+  if a.holder then retire(a.holder) end
+end
+
+function AB.HolderOf(owner)
+  local a = anchors[owner]
+  return a and a.holder or nil
+end
+
+-- Register (or refresh) a container anchor: owner shows unit's auras.
+function AB.Attach(owner, unit, key)
   if not enabled() then return end
+  local sig = signature(key)
+  local old = anchors[owner]
+  if old and old.unit == unit and old.sig == sig then
+    applySettings(old.holder, key) -- only ignore-* can differ: a plain refresh
+    return
+  end
+  local holder = newHolder(owner)
   local size = applySettings(holder, key)
-  local a = anchors[holder]
-  if a and a.unit == unit and a.id then return end
-  removeAnchor(holder)
   local ok, id = pcall(C_UnitAuras.AddPrivateAuraAnchor, {
     unitToken = unit, auraIndex = 1, parent = holder,
     showCooldownFrame = true, showCooldownEdge = false, showCountdownNumbers = false,
@@ -118,15 +173,17 @@ function AB.Attach(holder, unit, key)
     },
   })
   if ok and id then
-    anchors[holder] = { id = id, unit = unit }
+    removeAnchor(owner) -- new one is live first, then the old one goes
+    anchors[owner] = { id = id, unit = unit, holder = holder, sig = sig }
     AB.stats.anchors = AB.stats.anchors + 1
   else
+    retire(holder)
     AB.stats.failed = AB.stats.failed + 1
     AB.stats.lastError = ok and "no anchor id returned" or tostring(id):sub(1, 200)
   end
 end
 
-function AB.Detach(holder) removeAnchor(holder) end
+function AB.Detach(owner) removeAnchor(owner) end
 
 ---------------------------------------------------------------------------
 -- Party / raid: the buttons themselves are the holders (secure: OOC only)
@@ -284,7 +341,8 @@ function AB.UpdateRow(key)
   if own ~= (AB.ownBuffs[key] == true) then
     AB.ownBuffs[key] = own or nil
     local strip = strips[key]
-    if strip and anchors[strip] then applySettings(strip, key) end -- Blizzard re-reads with/without buffs
+    local h = strip and AB.HolderOf(strip)
+    if h then applySettings(h, key) end -- Blizzard re-reads with/without buffs
   end
   local row = rows[key]
   if not row then
@@ -346,9 +404,10 @@ auraEvents:SetScript("OnEvent", function(_, _, unit) AB.OnAura(unit) end)
 -- of whoever "target" is now (plain frame: fine in combat).
 function AB.RefreshStrip(key)
   local strip = strips[key]
-  if not (strip and anchors[strip]) then return end
+  local h = strip and AB.HolderOf(strip)
+  if not h then return end
   settingsTick = settingsTick + 1
-  pcall(strip.SetAttribute, strip, "update-settings", settingsTick)
+  pcall(h.SetAttribute, h, "update-settings", settingsTick)
   AB.stats.refreshes = (AB.stats.refreshes or 0) + 1
 end
 NF.On("PLAYER_TARGET_CHANGED", function()

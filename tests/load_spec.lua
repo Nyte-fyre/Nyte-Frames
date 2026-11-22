@@ -249,7 +249,14 @@ function NotifyInspect(u) inspected[#inspected + 1] = u end
 function IsEncounterInProgress() return false end
 ANCHORS, ANCHOR_N = {}, 0
 C_UnitAuras = {
-  AddPrivateAuraAnchor = function(args) ANCHOR_N = ANCHOR_N + 1 ANCHORS[ANCHOR_N] = args return ANCHOR_N end,
+  AddPrivateAuraAnchor = function(args)
+    -- like Blizzard: the frame count is fixed now, from the parent's max-* attributes
+    args.reserved = { buffs = args.parent._attr and args.parent._attr["max-buffs"],
+      debuffs = args.parent._attr and args.parent._attr["max-debuffs"] }
+    ANCHOR_PARENTS = ANCHOR_PARENTS or {}
+    if ANCHOR_PARENTS[args.parent] then ANCHOR_REUSED = true end
+    ANCHOR_PARENTS[args.parent] = true
+    ANCHOR_N = ANCHOR_N + 1 ANCHORS[ANCHOR_N] = args return ANCHOR_N end,
   RemovePrivateAuraAnchor = function(id) ANCHORS[id] = nil end,
   GetAuraDataByIndex = function(u, i, f)
     if inCombat then error("Auras cannot be accessed when secret") end
@@ -553,6 +560,24 @@ for _, u in ipairs(inspected) do if NAMES[u] == "Inspectme" then found = u end e
 check(found ~= nil, "unknown-role warrior gets inspected")
 check(found and NyteFramesDB.roleCache[UnitGUID(found)].role == "TANK", "inspect result (31 Prot) cached by GUID as TANK")
 check(#inspected > 0 and not (function() for _, u in ipairs(inspected) do if CLASSES[u] == "MAGE" then return true end end end)(), "pure DPS classes are never inspected")
+-- spec swap: a tank-assigned player who swaps to DPS shows as DPS after a re-inspect
+ROLES[found] = "TANK"
+check(ns.Roles.Get(found) == "TANK", "assigned tank (talents agree)")
+C_Traits.GetNodeInfo = function(_, id) return { ranksPurchased = (id == 2) and 31 or 0, posX = 1000 } end
+fire("PLAYER_SPECIALIZATION_CHANGED", found)
+check(NyteFramesDB.roleCache[UnitGUID(found)] == nil, "a spec swap forgets the old talents")
+for _ = 1, 10 do
+  ns.Roles.Pump()
+  local p = ns.Roles.Pending()
+  if not p then break end
+  fire("INSPECT_READY", p.guid)
+end
+C_Traits.GetNodeInfo = realNodes
+local swapped, src = ns.Roles.Get(found)
+check(swapped == "DAMAGER" and src == "talents", "after the swap the new talents beat the stale TANK role: " .. tostring(swapped))
+fire("ROLE_CHANGED_INFORM", NAMES[found], NAMES[found], "DAMAGER", "TANK")
+check(ns.Roles.Get(found) == "TANK", "picking a role again wins over older talents")
+ROLES[found] = "DAMAGER"
 -- manual override via /nf role
 SlashCmdList.NYTEFRAMES("role D1 tank")
 check(ns.profile.roleOverrides.D1 == "TANK", "/nf role sets override")
@@ -580,12 +605,12 @@ runTimers() runTimers()
 local pbtn
 for _, b in ipairs(ns.Party.buttons) do if b.unit == "party1" and ns.Party.placed[b] then pbtn = b end end
 check(pbtn ~= nil, "party1 has a Nyte button")
-local function anchorFor(holder) for id, a in pairs(ANCHORS) do if a.parent == holder then return a, id end end end
+local function anchorFor(owner) for id, a in pairs(ANCHORS) do if a.parent._owner == owner then return a, id end end end
 local pa = anchorFor(pbtn)
 check(pa and pa.isContainer and pa.unitToken == "party1", "party button is a container aura anchor for its unit")
-check(pbtn._attr["max-debuffs"] == 3 and pbtn._attr["ignore-buffs"] == true, "party: 3 debuffs, buffs off (our settings)")
-check(pbtn._attr["aura-organization-type"] == 2 and pbtn._attr["dispel-indicator-option"] == 1, "Blizzard's own aura settings copied")
-check(pbtn._attr["update-settings"] ~= nil, "settings update signalled")
+check(pa.parent._attr["max-debuffs"] == 3 and pa.parent._attr["ignore-buffs"] == true, "party: 3 debuffs, buffs off (our settings)")
+check(pa.parent._attr["aura-organization-type"] == 2 and pa.parent._attr["dispel-indicator-option"] == 1, "Blizzard's own aura settings copied")
+check(pa.parent._attr["update-settings"] ~= nil, "settings update signalled")
 -- target strip under the frame
 local tb = _G.NyteFrames_target
 local ta = nil
@@ -609,8 +634,8 @@ AB.OnAura("target")
 local trow = AB.rows.target
 check(trow and trow.count == 3 and trow._shown, "out of combat Nyte shows every target buff (others' and self-only too)")
 check(trow.icons[2].count._text == "3" and trow.icons[1].count._text == "", "stack counts only above 1")
-check(ta.parent._attr["ignore-buffs"] == true and ta.parent._attr["max-buffs"] == 0, "Blizzard skips buffs while Nyte draws them")
-local stripY = ta.parent._anchors and ta.parent._anchors.TOPLEFT
+check(ta.parent._attr["ignore-buffs"] == true and ta.parent._attr["max-buffs"] == 16, "Blizzard skips buffs while Nyte draws them (max-buffs never changes)")
+local stripY = ta.parent._owner._anchors and ta.parent._owner._anchors.TOPLEFT
 check(stripY ~= nil, "debuff strip re-placed under the buff row")
 fire("PLAYER_REGEN_DISABLED")
 inCombat = true
@@ -630,6 +655,25 @@ ns.profile.roleOverrides["Zed Pal"] = "TANK" fire("GROUP_ROSTER_UPDATE") runTime
 ns.profile.roleOverrides["Zed Pal"] = nil
 local pa2 = anchorFor(pbtn)
 check(pa2 and pa2.unitToken == pbtn.unit, "after a re-sort the anchor follows the button's new unit")
+check(not ANCHOR_REUSED, "each anchor gets a fresh holder frame (no quick reuse)")
+local function overReserved()
+  for _, a in pairs(ANCHORS) do
+    local at = a.parent._attr
+    if (at["max-buffs"] or 0) > (a.reserved.buffs or 0) or (at["max-debuffs"] or 0) > (a.reserved.debuffs or 0) then return true end
+  end
+  return false
+end
+check(not overReserved(), "no live anchor asks for more icons than Blizzard set aside")
+local tStrip = ta.parent._owner
+local tHolder = ns.AuraBridge.HolderOf(tStrip)
+ns.profile.frames.target.auras.max = 8
+ns.AuraBridge.LayoutTarget()
+local tHolder2 = ns.AuraBridge.HolderOf(tStrip)
+check(tHolder2 ~= tHolder and tHolder2._attr["max-debuffs"] == 8, "changing the icon count makes a new holder")
+check(tHolder._attr["max-debuffs"] == 16, "the old holder's limits were never changed")
+check(not overReserved(), "still within reserved icons after a settings change")
+ns.profile.frames.target.auras.max = 16
+ns.AuraBridge.LayoutTarget()
 ns.AuraBridge.Report()
 -- threat border
 THREAT.party1 = 3

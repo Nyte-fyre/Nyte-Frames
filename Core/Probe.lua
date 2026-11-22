@@ -670,7 +670,8 @@ function P.Start()
     logEvent(event .. "(" .. argText(...) .. ") bosses: " .. bossTokenText())
   end
   for _, e in ipairs({ "ENCOUNTER_START", "ENCOUNTER_END", "INSTANCE_ENCOUNTER_ENGAGE_UNIT",
-      "PLAYER_ROLES_ASSIGNED", "ROLE_CHANGED_INFORM", "ADDON_RESTRICTION_STATE_CHANGED" }) do
+      "PLAYER_ROLES_ASSIGNED", "ROLE_CHANGED_INFORM", "ADDON_RESTRICTION_STATE_CHANGED",
+      "PLAYER_SPECIALIZATION_CHANGED" }) do
     NF.On(e, logged)
   end
   NF.On("UNIT_TARGETABLE_CHANGED", function(event, unit)

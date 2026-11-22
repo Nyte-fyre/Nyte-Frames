@@ -3,7 +3,10 @@
 -- Chain (handoff section 5), first answer wins:
 --   1. manual override (profile.roleOverrides, by character name)
 --   2. UnitGroupRolesAssigned, TANK/HEALER only: this client reports DAMAGER
---      for anyone without a role set (probe #1), so DAMAGER isn't trusted
+--      for anyone without a role set (probe #1), so DAMAGER isn't trusted.
+--      Exception: the group role doesn't follow a spec swap on this client
+--      (a tank who swaps to DPS stays TANK), so a talent inspect made after
+--      the last role change, triggered by PLAYER_SPECIALIZATION_CHANGED, wins.
 --   3. raid roster: main tank flag (GetRaidRosterInfo)
 --   4. talents, read by inspecting the player (cached per GUID)
 --   5. class heuristic: Priest = healer, everyone else = DPS
@@ -27,6 +30,9 @@ Roles.autoInspect = true
 local queue, queued, pending = {}, {}, nil
 local lastInspect = 0
 local roster = {}           -- [unit] = { mainTank = bool } from the last roster scan
+local assignedSeen = {}     -- [guid] = { role, seq, name }: when the group role last changed
+local seq = 0               -- session order of role picks vs. inspects
+local function nextSeq() seq = seq + 1 return seq end
 
 local function cache()
   NyteFramesDB.roleCache = NyteFramesDB.roleCache or {}
@@ -55,10 +61,19 @@ function Roles.Get(unit)
   local overrides = NF.profile and NF.profile.roleOverrides
   if name and overrides and overrides[name] then return overrides[name], "override" end
   local assigned = NF.Compat.Role(unit)
-  if assigned == "TANK" or assigned == "HEALER" then return assigned, "assigned" end
-  if roster[unit] and roster[unit].mainTank then return "TANK", "roster" end
   local guid = guidOf(unit)
   local c = guid and NyteFramesDB and cache()[guid]
+  if assigned == "TANK" or assigned == "HEALER" then
+    local seen = guid and assignedSeen[guid]
+    if guid and (not seen or seen.role ~= assigned) then
+      seen = { role = assigned, seq = nextSeq(), name = name }
+      assignedSeen[guid] = seen
+    end
+    -- talents read after the role was picked (a spec swap) beat the stale role
+    if c and c.role and c.seq and seen and c.seq > seen.seq then return c.role, "talents" end
+    return assigned, "assigned"
+  end
+  if roster[unit] and roster[unit].mainTank then return "TANK", "roster" end
   if c and c.role then return c.role, "talents" end
   local class = classOf(unit)
   if class and RoleRules.TREES[class] == nil then return "DAMAGER", "class" end
@@ -143,7 +158,8 @@ local function onInspectReady(_, guid)
   if ok and buckets and class then
     local role = RoleRules.FromTalents(class, buckets)
     if role then
-      cache()[p.guid] = { role = role, t = time() }
+      -- seq: read this session, so it can outrank an older role pick
+      cache()[p.guid] = { role = role, t = time(), seq = nextSeq() }
       Roles.Changed()
     end
   end
@@ -164,6 +180,18 @@ function Roles.Changed()
   end
 end
 
+-- A group member swapped spec: forget their talents and inspect again.
+function Roles.SpecChanged(unit)
+  unit = Plain(unit)
+  if type(unit) ~= "string" or not (unit:find("^party%d") or unit:find("^raid%d")) then return end
+  local guid = guidOf(unit)
+  if not guid then return end
+  if NyteFramesDB then cache()[guid] = nil end
+  queued[guid] = nil
+  Roles.Queue(unit)
+  Roles.Changed()
+end
+
 -- Manual override (nil role = back to automatic)
 function Roles.SetOverride(name, role)
   if not name then return end
@@ -175,9 +203,21 @@ function Roles.Init()
   -- drop old cache entries
   local now, maxAge = time(), Roles.CACHE_DAYS * 86400
   for guid, c in pairs(cache()) do
-    if type(c) ~= "table" or not c.t or now - c.t > maxAge then cache()[guid] = nil end
+    if type(c) ~= "table" or not c.t or now - c.t > maxAge then cache()[guid] = nil
+    else c.seq = nil end -- last session's inspect doesn't outrank this session's roles
   end
   NF.On("INSPECT_READY", onInspectReady)
+  NF.On("PLAYER_SPECIALIZATION_CHANGED", function(_, unit) Roles.SpecChanged(unit) end)
+  -- a role picked again (even the same one) outranks older talents
+  NF.On("ROLE_CHANGED_INFORM", function(_, changed)
+    changed = Plain(changed)
+    if type(changed) ~= "string" then return end
+    changed = changed:gsub("%-.*$", "")
+    for guid, seen in pairs(assignedSeen) do
+      if seen.name == changed then assignedSeen[guid] = nil end
+    end
+    Roles.Changed()
+  end)
   C_Timer.NewTicker(1, function()
     if #queue > 0 or pending then pcall(Roles.Pump) end
   end)
