@@ -3,3 +3,4 @@ private/
 __pycache__/
 *.pyc
 docs/probe-raw.md
+docs/
