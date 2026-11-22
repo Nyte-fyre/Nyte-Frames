@@ -789,6 +789,8 @@ do
   local function power() MT.OnEvent("UNIT_POWER_UPDATE", "player", "MANA") end
   check(pb2.manaTick and pb2.fiveRule and pb2.manaCost, "player power bar has tick spark, 5s spark and cost shade")
   check(pb2.manaTick.move._dur == 2 and pb2.manaTick.move._offset ~= nil, "tick spark sweeps the bar every 2s")
+  check(pb2.manaTick.move._offset == pb2:GetWidth() - 2, "the spark sweeps the full bar width, not the mana fill")
+  check(pb2.manaLayer ~= nil and pb2.manaTick._anchors.LEFT.rel == pb2.manaLayer, "spark rides its own layer over the bar, not the StatusBar")
   power()                       -- first tick: phase unknown
   check(not MT.state.locked and not pb2.manaTick._shown, "one tick isn't enough to lock the phase")
   clock = 502.05 power()        -- 2s later: locked
@@ -799,7 +801,7 @@ do
   C_Spell.GetSpellPowerCost = function() return { { type = 0, cost = 50 } } end
   clock = 503.5
   MT.OnEvent("UNIT_SPELLCAST_START", "player", "guid", 635)
-  local bw = pb2.power:GetWidth()
+  local bw = pb2:GetWidth() - 2
   check(pb2.manaCost._shown and math.abs((pb2.manaCost._w or 0) - bw / 2) < 0.01, "cast cost shades the right share of the bar")
   check(pb2.manaCost._anchors.TOPRIGHT and pb2.manaCost._anchors.TOPRIGHT.rel == pb2.power:GetStatusBarTexture(), "cost shade ends at the mana fill's edge")
   clock = 505

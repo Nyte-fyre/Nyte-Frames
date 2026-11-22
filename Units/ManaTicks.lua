@@ -38,11 +38,10 @@ end
 ---------------------------------------------------------------------------
 -- Drawing
 ---------------------------------------------------------------------------
-local function makeSpark(bar, r, g, b)
-  local s = bar:CreateTexture(nil, "OVERLAY", nil, 7)
+local function makeSpark(layer, r, g, b)
+  local s = layer:CreateTexture(nil, "OVERLAY", nil, 7)
   s:SetTexture(FLAT)
-  s:SetVertexColor(r, g, b, 0.9)
-  s:SetBlendMode("ADD")
+  s:SetVertexColor(r, g, b, 0.95)
   s:Hide()
   local ag = s:CreateAnimationGroup()
   local move = ag and ag:CreateAnimation("Translation")
@@ -50,17 +49,23 @@ local function makeSpark(bar, r, g, b)
   return s
 end
 
+-- The sparks live on their own layer frame over the power bar, not inside
+-- the StatusBar: on this client a bar's own textures only show over the
+-- filled part, so a spark drawn in the bar stopped at the current mana.
 function MT.Attach(b)
   if b.manaTick then return end
-  local bar = b.power
-  pcall(bar.SetClipsChildren, bar, true)
-  b.manaTick = makeSpark(bar, 1, 1, 1)
+  local layer = CreateFrame("Frame", nil, b)
+  layer:SetAllPoints(b.power)
+  layer:SetFrameLevel(b:GetFrameLevel() + 4) -- above the bars, under the text
+  pcall(layer.SetClipsChildren, layer, true)
+  b.manaLayer = layer
+  b.manaTick = makeSpark(layer, 1, 1, 1)
   if b.manaTick.ag then b.manaTick.ag:SetLooping("REPEAT") end
-  b.fiveRule = makeSpark(bar, 1, 0.82, 0.2)
+  b.fiveRule = makeSpark(layer, 1, 0.82, 0.2)
   if b.fiveRule.ag then
     b.fiveRule.ag:SetScript("OnFinished", function() b.fiveRule:Hide() MT.Refresh() end)
   end
-  b.manaCost = bar:CreateTexture(nil, "OVERLAY", nil, 6)
+  b.manaCost = layer:CreateTexture(nil, "OVERLAY", nil, 6)
   b.manaCost:SetTexture(FLAT)
   b.manaCost:SetVertexColor(0, 0, 0, 0.45)
   b.manaCost:Hide()
@@ -70,11 +75,15 @@ end
 function MT.Layout(b)
   if b.key ~= "player" then return end
   MT.Attach(b)
-  local w, h = b.power:GetWidth(), b.power:GetHeight()
+  -- full bar width from the button's own size (the bar is inset 1px each
+  -- side); never the fill, which follows current mana
+  local w = math.max(1, (b:GetWidth() or 2) - 2)
+  local h = b.power:GetHeight()
+  b.manaLayer:SetShown(b.power:IsShown())
   for _, s in ipairs({ b.manaTick, b.fiveRule }) do
     s:ClearAllPoints()
-    s:SetPoint("LEFT", b.power, "LEFT", -1, 0)
-    s:SetSize(2, math.max(2, h + 2))
+    s:SetPoint("LEFT", b.manaLayer, "LEFT", -1, 0)
+    s:SetSize(2, math.max(2, h))
     if s.move then s.move:SetOffset(w, 0) end
   end
   if b.manaTick.move then b.manaTick.move:SetDuration(MT.TICK) end
@@ -169,7 +178,7 @@ function MT.OnCastStart(spellID)
   if not (c.cost and powerKind() == "mana") then b.manaCost:Hide() return end
   local cost = costOf(spellID)
   local max = Plain(Try(UnitPowerMax, "player", 0))
-  local w = b.power:GetWidth()
+  local w = math.max(1, (b:GetWidth() or 2) - 2)
   if not (cost and cost > 0 and type(max) == "number" and max > 0 and type(w) == "number") then
     b.manaCost:Hide()
     return
