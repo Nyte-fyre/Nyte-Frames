@@ -39,7 +39,7 @@ local function frameDefaults(t)
     castBar = false,
     overlays = { healPrediction = true, healMineOnly = false, absorbs = true,
                  threat = true, dispelHighlight = true, rangeFade = false },
-    icons = { raidTarget = true, leader = true, role = false },
+    icons = { raidTarget = true, leader = true, role = false, status = true }, -- status: ready check / summon / res
   }
   for k, v in pairs(t) do base[k] = v end
   return base
@@ -82,7 +82,7 @@ DB.DEFAULTS = {
       offset = { x = 0, y = 18 },
       overlays = { healPrediction = true, healMineOnly = false, absorbs = true, threat = true,
                    dispelHighlight = true, rangeFade = true },
-      icons = { raidTarget = true, leader = true, role = true },
+      icons = { raidTarget = true, leader = true, role = true, status = true },
       auras = { buffs = false, debuffs = true, max = 3, size = 14, growth = "LEFT",
         onlyMine = false, hideLong = true, dispellableFirst = true, filter = {} } }),
     raid = frameDefaults({ width = 95, height = 45, powerHeightPct = 10, spacing = 2,
@@ -90,7 +90,7 @@ DB.DEFAULTS = {
       maxColumnsPerRow = 8,
       overlays = { healPrediction = true, healMineOnly = false, absorbs = true, threat = true,
                    dispelHighlight = true, rangeFade = true },
-      icons = { raidTarget = true, leader = true, role = true },
+      icons = { raidTarget = true, leader = true, role = true, status = true },
       auras = { buffs = false, debuffs = true, max = 3, size = 14, growth = "LEFT",
         onlyMine = false, hideLong = true, dispellableFirst = true, filter = {} } }),
     boss = frameDefaults({ width = 195, height = 40, spacing = 4, castBar = true,

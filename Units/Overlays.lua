@@ -15,6 +15,7 @@ OV.EVENTS = {
   -- no UNIT_HEALTH: the bars are anchored to the health fill's edge and move
   -- with it; their own values don't depend on current health
   UNIT_THREAT_SITUATION_UPDATE = "UpdateThreat", UNIT_IN_RANGE_UPDATE = "UpdateRange",
+  INCOMING_RESURRECT_CHANGED = "UpdateStatus", INCOMING_SUMMON_CHANGED = "UpdateStatus",
 }
 
 local function cfgOf(b) return NF.profile.frames[b.key] end
@@ -36,6 +37,8 @@ function OV.Attach(b)
   b.raidIcon:Hide()
   b.leaderIcon = b.textLayer:CreateTexture(nil, "OVERLAY")
   b.leaderIcon:Hide()
+  b.statusIcon = b.textLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+  b.statusIcon:Hide()
 end
 
 -- Pin the heal bar to the end of the health fill, and the absorb bar to the
@@ -67,6 +70,10 @@ function OV.Layout(b, w, h)
   b.leaderIcon:SetSize(11, 11)
   b.leaderIcon:ClearAllPoints()
   b.leaderIcon:SetPoint("CENTER", b, "TOPLEFT", 4, 0)
+  local st = math.max(12, math.min(24, math.floor(h * 0.55)))
+  b.statusIcon:SetSize(st, st)
+  b.statusIcon:ClearAllPoints()
+  b.statusIcon:SetPoint("CENTER", b, "CENTER", 0, 0)
 end
 
 function OV.UpdateBars(b)
@@ -143,11 +150,67 @@ function OV.UpdateIcons(b)
   end
 end
 
+---------------------------------------------------------------------------
+-- Status icon (center): ready check > summon > incoming resurrect
+---------------------------------------------------------------------------
+local RC = "Interface\\RaidFrame\\ReadyCheck-"
+OV.READY_TEX = { ready = RC .. "Ready", notready = RC .. "NotReady", waiting = RC .. "Waiting" }
+OV.RES_TEX = "Interface\\RaidFrame\\Raid-Icon-Rez"
+OV.SUMMON_ATLAS = { [1] = "Raid-Icon-SummonPending", [2] = "Raid-Icon-SummonAccepted", [3] = "Raid-Icon-SummonDeclined" }
+OV.READY_LINGER = 6 -- seconds the results stay up after the check ends
+
+local readyCheck = { active = false, finished = false }
+OV.readyCheck = readyCheck
+
+local function readyState(u)
+  if not (readyCheck.active or readyCheck.finished) or not GetReadyCheckStatus then return nil end
+  local st = Plain(Try(GetReadyCheckStatus, u))
+  if st == "waiting" and readyCheck.finished then st = "notready" end -- no answer = not ready
+  return OV.READY_TEX[st] and st or nil
+end
+
+local function summonState(u)
+  local f = C_IncomingSummon and C_IncomingSummon.IncomingSummonStatus
+  local st = f and Plain(Try(f, u))
+  return OV.SUMMON_ATLAS[st] and st or nil
+end
+
+function OV.UpdateStatus(b)
+  local icon = b.statusIcon
+  icon:Hide()
+  local on = cfgOf(b).icons.status
+  if not on then return end
+  local u = b.unit
+  local rc = readyState(u)
+  if rc then
+    icon:SetTexture(OV.READY_TEX[rc])
+    icon:SetTexCoord(0, 1, 0, 1)
+    icon:Show()
+    b.statusKind = "ready:" .. rc
+    return
+  end
+  local sm = summonState(u)
+  if sm and icon.SetAtlas and pcall(icon.SetAtlas, icon, OV.SUMMON_ATLAS[sm]) then
+    icon:Show()
+    b.statusKind = "summon:" .. sm
+    return
+  end
+  if Plain(Try(UnitHasIncomingResurrection, u)) == true then
+    icon:SetTexture(OV.RES_TEX)
+    icon:SetTexCoord(0, 1, 0, 1)
+    icon:Show()
+    b.statusKind = "res"
+    return
+  end
+  b.statusKind = nil
+end
+
 function OV.UpdateAll(b)
   OV.UpdateBars(b)
   OV.UpdateThreat(b)
   OV.UpdateRange(b)
   OV.UpdateIcons(b)
+  OV.UpdateStatus(b)
 end
 
 -- group-wide events
@@ -162,3 +225,23 @@ end
 NF.On("RAID_TARGET_UPDATE", function() each(OV.UpdateIcons) end)
 NF.On("PARTY_LEADER_CHANGED", function() each(OV.UpdateIcons) end)
 NF.On("GROUP_ROSTER_UPDATE", function() each(OV.UpdateIcons) end)
+
+-- ready check: everyone's icon at once
+local linger = 0
+NF.On("READY_CHECK", function()
+  readyCheck.active, readyCheck.finished = true, false
+  linger = linger + 1
+  each(OV.UpdateStatus)
+end)
+NF.On("READY_CHECK_CONFIRM", function() each(OV.UpdateStatus) end)
+NF.On("READY_CHECK_FINISHED", function()
+  readyCheck.active, readyCheck.finished = false, true
+  each(OV.UpdateStatus)
+  linger = linger + 1
+  local mine = linger
+  C_Timer.After(OV.READY_LINGER, function()
+    if mine ~= linger then return end -- a new check started meanwhile
+    readyCheck.finished = false
+    each(OV.UpdateStatus)
+  end)
+end)

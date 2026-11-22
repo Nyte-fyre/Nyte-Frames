@@ -218,6 +218,8 @@ local function build()
     function(v) cfg().overlays.rangeFade = v end, 166)
   extra("roleIcon", "Role icon", function() return cfg().icons.role end,
     function(v) cfg().icons.role = v end, 188)
+  extra("statusIcon", "Ready check / summon / res", function() return cfg().icons.status end,
+    function(v) cfg().icons.status = v end, 210)
   widgets.auraSize = slider(window, "Aura icon size", 8, 40, 1,
     function() return cfg().auras.size end,
     function(v) cfg().auras.size = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end)

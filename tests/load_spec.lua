@@ -707,6 +707,41 @@ check(not overReserved(), "still within reserved icons after a settings change")
 ns.profile.frames.target.auras.max = 16
 ns.AuraBridge.LayoutTarget()
 ns.AuraBridge.Report()
+-- status icon: ready check > summon > incoming res
+READY, SUMMON, RES = {}, {}, {}
+function GetReadyCheckStatus(u) return READY[u] end
+function UnitHasIncomingResurrection(u) return RES[u] end
+C_IncomingSummon = { IncomingSummonStatus = function(u) return SUMMON[u] or 0 end }
+check(pbtn.statusIcon ~= nil and not pbtn.statusIcon._shown, "status icon hidden with nothing going on")
+READY.party1 = "waiting"
+fire("READY_CHECK", "Nyte Fyre", 30)
+check(pbtn.statusKind == "ready:waiting" and pbtn.statusIcon._shown, "ready check: waiting icon")
+READY.party1 = "ready"
+fire("READY_CHECK_CONFIRM", "party1", true)
+check(pbtn.statusKind == "ready:ready", "ready check: ready icon after confirm")
+READY.party1 = "waiting"
+fire("READY_CHECK_FINISHED")
+check(pbtn.statusKind == "ready:notready", "no answer by the end shows not ready")
+READY.party1 = nil
+runTimers()
+check(pbtn.statusKind == nil and not pbtn.statusIcon._shown, "ready check icons clear a few seconds after it ends")
+SUMMON.party1 = 1
+RES.party1 = true
+ns.UnitButton.Dispatch(pbtn, "INCOMING_SUMMON_CHANGED")
+check(pbtn.statusKind == "summon:1", "pending summon beats incoming res")
+SUMMON.party1 = 0
+ns.UnitButton.Dispatch(pbtn, "INCOMING_SUMMON_CHANGED")
+check(pbtn.statusKind == "res", "incoming res icon")
+RES.party1 = secret(true)
+ns.UnitButton.Dispatch(pbtn, "INCOMING_RESURRECT_CHANGED")
+check(pbtn.statusKind == nil, "a secret answer shows nothing (no error)")
+RES.party1 = true
+ns.profile.frames.party.icons.status = false
+ns.UnitButton.Dispatch(pbtn, "INCOMING_RESURRECT_CHANGED")
+check(not pbtn.statusIcon._shown, "status icon can be turned off")
+ns.profile.frames.party.icons.status = true
+RES.party1 = nil
+ns.UnitButton.Dispatch(pbtn, "INCOMING_RESURRECT_CHANGED")
 -- threat border
 THREAT.party1 = 3
 pbtn._scripts.OnEvent(pbtn, "UNIT_THREAT_SITUATION_UPDATE")
