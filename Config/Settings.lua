@@ -220,6 +220,12 @@ local function build()
     function(v) cfg().icons.role = v end, 188)
   extra("statusIcon", "Ready check / summon / res", function() return cfg().icons.status end,
     function(v) cfg().icons.status = v end, 210)
+  local function tickSet(field)
+    return function(v) cfg().manaTicks[field] = v NF.ManaTicks.Refresh() end
+  end
+  extra("manaTick", "Mana / energy tick spark", function() return cfg().manaTicks.ticks end, tickSet("ticks"), 0)
+  extra("fiveRule", "5-second rule spark", function() return cfg().manaTicks.fiveSecond end, tickSet("fiveSecond"), 0)
+  extra("manaCost", "Spell cost on mana bar", function() return cfg().manaTicks.cost end, tickSet("cost"), 0)
   widgets.auraSize = slider(window, "Aura icon size", 8, 40, 1,
     function() return cfg().auras.size end,
     function(v) cfg().auras.size = v NF.AuraBridge.ScheduleGroup() pcall(NF.AuraBridge.LayoutTarget) end)
@@ -279,8 +285,8 @@ local function build()
     function(v) cfg().auras.onlyDispellable = v auraChanged() end)
   widgets.hlOnlyDispel:SetPoint("TOPLEFT", 12, -188)
   local hlNote = label(hl, "|cff888888By debuff type, not spell name: the game hides which spell it is from addons in combat.|r", 10)
-  hlNote:SetPoint("TOPLEFT", 12, -212)
   hlNote:SetWidth(286)
+  hl.note = hlNote
   widgets.hlButton = button(window, "Debuff highlight...", 170, function()
     hl:SetShown(not hl:IsShown())
     Settings.Show(current)
@@ -323,8 +329,69 @@ local function build()
   widgets.columns:SetPoint("TOPLEFT", 14, py - 302)
 
   local note = label(window, "|cff888888Blizzard's target-of-target lives inside its target frame, so it stays hidden while Nyte Target is on. Unlock (/nf unlock) to drag, resize from the corner, nudge with arrow keys and use the grid.|r", 10)
-  note:SetPoint("BOTTOMLEFT", 14, 12)
   note:SetWidth(470)
+  window.note = note
+  window.columnsTop = py - 32
+  for _, n in ipairs({ "width", "height", "power", "columns" }) do widgets[n]:SetWidth(200) end
+  widgets.frameText:SetWidth(240)
+  widgets.nameColor:SetWidth(240)
+end
+
+-- Two columns that stack only what's shown on this page (no gaps, no
+-- overlap), then the buttons and the note under the taller one; the window
+-- grows to fit. Step heights: checkbox 22, cycle 28, slider 44 (label above).
+local LEFT_COL = { { "width", "slider" }, { "height", "slider" }, { "power", "slider" },
+  { "frameText", "cycle" }, { "nameColor", "cycle" }, { "powerText", "check" }, { "columns", "slider" } }
+local RIGHT_COL = { { "castBar", "check" }, { "buffs", "check" }, { "debuffs", "check" },
+  { "healPred", "check" }, { "absorbs", "check" }, { "threat", "check" }, { "range", "check" },
+  { "roleIcon", "check" }, { "statusIcon", "check" },
+  { "manaTick", "check" }, { "fiveRule", "check" }, { "manaCost", "check" }, { "gap", 10 }, { "auraSize", "slider" },
+  { "auraMax", "slider" }, { "hlButton", "button" } }
+local STEP = { check = 22, cycle = 28, slider = 44, button = 30 }
+-- drawn width of each kind (slider: bar + value text), for the overlap test
+local WIDTH = { check = 230, cycle = 240, slider = 240, button = 170 }
+-- drawn height, independent of STEP (slider: label 14 + gap + 12px bar)
+local HEIGHT = { check = 20, cycle = 22, slider = 32, button = 22 }
+Settings.placed = {}
+Settings.LEFT_X, Settings.RIGHT_X = 14, 270
+
+local function flow(x, y, items)
+  local lastWasGap = true
+  for _, it in ipairs(items) do
+    if it[1] == "gap" then
+      if not lastWasGap then y = y - it[2] lastWasGap = true end
+    else
+      local w = widgets[it[1]]
+      if w and w:IsShown() then
+        w:ClearAllPoints()
+        w:SetPoint("TOPLEFT", window, "TOPLEFT", x, (it[2] == "slider") and (y - 18) or y)
+        Settings.placed[#Settings.placed + 1] = { name = it[1], x = x, top = y,
+          bottom = y - HEIGHT[it[2]], right = x + WIDTH[it[2]] }
+        y = y - STEP[it[2]]
+        lastWasGap = false
+      end
+    end
+  end
+  return y
+end
+
+function Settings.Layout()
+  local top = window.columnsTop
+  Settings.placed = {}
+  local leftY = flow(Settings.LEFT_X, top, LEFT_COL)
+  local rightY = flow(Settings.RIGHT_X, top, RIGHT_COL)
+  local y = math.min(leftY, rightY) - 8
+  widgets.reset:ClearAllPoints()
+  widgets.reset:SetPoint("TOPLEFT", window, "TOPLEFT", Settings.LEFT_X, y)
+  y = y - 34
+  Settings.placed[#Settings.placed + 1] = { name = "reset+unlock", x = Settings.LEFT_X, top = y,
+    bottom = y - 26, right = Settings.LEFT_X + 290 }
+  window.note:ClearAllPoints()
+  window.note:SetPoint("TOPLEFT", window, "TOPLEFT", Settings.LEFT_X, y)
+  local noteH = window.note:GetStringHeight() or 26
+  if type(noteH) ~= "number" or noteH < 10 then noteH = 26 end
+  window:SetHeight(math.floor(-y + noteH + 14))
+  Settings.leftBottom, Settings.rightBottom = leftY, rightY
 end
 
 function Settings.Show(key)
@@ -354,12 +421,28 @@ function Settings.Show(key)
   widgets.auraSize:SetShown(auras)
   widgets.auraMax:SetShown(auras)
   widgets.hlButton:SetShown(auras)
+  widgets.statusIcon:SetShown(current ~= "boss")
+  for _, n in ipairs({ "manaTick", "fiveRule", "manaCost" }) do widgets[n]:SetShown(current == "player") end
   if not auras then widgets.hlPanel:Hide() end
   -- frame coloring only on group frames; bigger / only-dispellable apply to all icons
   local pageLabel = current
   for _, pg in ipairs(Settings.PAGES) do if pg.key == current then pageLabel = pg.label end end
   widgets.hlPanel.title:SetText("Debuff highlight: " .. pageLabel)
   for _, n in ipairs({ "hlOn", "hlMode", "hlColor", "hlPulse", "hlBorder" }) do widgets[n]:SetShown(group) end
+  local hy = -36
+  for _, it in ipairs({ { "hlOn", 26 }, { "hlMode", 26 }, { "hlColor", 28 }, { "hlPulse", 22 },
+      { "hlBorder", 28 }, { "hlBig", 22 }, { "hlOnlyDispel", 26 } }) do
+    local w = widgets[it[1]]
+    if w:IsShown() then
+      w:ClearAllPoints()
+      w:SetPoint("TOPLEFT", widgets.hlPanel, "TOPLEFT", 12, hy)
+      hy = hy - it[2]
+    end
+  end
+  widgets.hlPanel.note:ClearAllPoints()
+  widgets.hlPanel.note:SetPoint("TOPLEFT", widgets.hlPanel, "TOPLEFT", 12, hy - 2)
+  widgets.hlPanel:SetHeight(-hy + 40)
+  Settings.Layout()
   window:Show()
 end
 

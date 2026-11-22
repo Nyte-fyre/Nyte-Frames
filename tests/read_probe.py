@@ -116,6 +116,13 @@ def main():
             row = [f"{f}={short(c)}" for f, c in sorted(fields.items()) if f.startswith("payload")]
             if row:
                 lines.append(f"- {ctx} **{unit}**: " + ", ".join(row))
+    lines += ["", "## mana tick intervals (seconds: count; 2.0 = classic ticks)"]
+    mt = db.get("manaTicks") or {}
+    iv = mt.get("intervals") or {}
+    if isinstance(iv, list):
+        iv = {i + 1: v for i, v in enumerate(iv)}
+    lines.append("- " + (", ".join(f"{int(k) / 10:.1f}s: {v}" for k, v in sorted(iv.items(), key=lambda kv: int(kv[0])))
+                          or "none recorded") + f" (phase locked: {mt.get('locked')})")
     lines += ["", "## perf (/nf perf, newest first)"]
     for r in db.get("perf", []) or []:
         lines.append(f"- {r.get('at')} v{r.get('version')} {r.get('context')}: {r.get('seconds', 0):.0f}s, "

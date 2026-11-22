@@ -278,6 +278,7 @@ function UB.Layout(b)
   b.powerText:SetFont(font, math.max(8, size - 2), "")
 
   NF.Overlays.Layout(b, w, h)
+  if b.key == "player" and NF.ManaTicks then NF.ManaTicks.Layout(b) end
   b.roleIcon:ClearAllPoints()
   b.roleIcon:SetPoint("TOPRIGHT", b.health, "TOPRIGHT", -2, -2)
   b.roleText:SetFont(font, math.max(8, size - 2), "")

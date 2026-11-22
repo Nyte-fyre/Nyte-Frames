@@ -54,6 +54,18 @@ function FrameMethods.GetParent(self) return self._parent end
 function FrameMethods.GetStatusBarTexture(self) return self._fill end
 function FrameMethods.SetStatusBarTexture(self) self._fill = CreateFrame("Texture") end
 function FrameMethods.SetTimerDuration() end
+function FrameMethods.CreateAnimationGroup(self)
+  local g = newObject("AnimationGroup")
+  g.CreateAnimation = function() local a = newObject("Animation")
+    a.SetOffset = function(a2, x) a2._offset = x end
+    a.SetDuration = function(a2, d) a2._dur = d end
+    return a end
+  g.Play = function(g2, _, offset) g2._playing = true g2._offset = offset or 0 g2._plays = (g2._plays or 0) + 1 end
+  g.Stop = function(g2) g2._playing = false end
+  g.IsPlaying = function(g2) return g2._playing end
+  g.SetScript = function(g2, s, fn) g2._scripts[s] = fn end
+  return g
+end
 function FrameMethods.GetFrameLevel() return 1 end
 function FrameMethods.GetHeight(self) return self._h or 768 end
 function FrameMethods.GetWidth(self) return self._w or 1024 end
@@ -636,6 +648,30 @@ for _, f in ipairs(ns.EditMode.fakes) do if f._shown then shown = shown + 1 end 
 check(ns.EditMode.previewMode == "raid" and shown == 24, "fake raid preview shows 24 others: " .. shown)
 ns.EditMode.Lock()
 
+-- settings window: no two controls overlap on any page, columns don't collide
+do
+  local bad = {}
+  for _, page in ipairs(ns.Settings.PAGES) do
+    ns.Settings.Show(page.key)
+    local P = ns.Settings.placed
+    if #P < 6 then bad[#bad + 1] = page.key .. ": only " .. #P .. " controls laid out" end
+    for i = 1, #P do
+      local a = P[i]
+      if a.x < ns.Settings.RIGHT_X and a.right > ns.Settings.RIGHT_X - 4 and a.name ~= "reset+unlock" then
+        bad[#bad + 1] = page.key .. ": " .. a.name .. " runs into the right column"
+      end
+      for j = i + 1, #P do
+        local b = P[j]
+        local xOver = a.x < b.right and b.x < a.right
+        local yOver = a.bottom < b.top and b.bottom < a.top
+        if xOver and yOver then bad[#bad + 1] = page.key .. ": " .. a.name .. " overlaps " .. b.name end
+      end
+    end
+  end
+  check(#bad == 0, "settings pages have no overlapping controls: " .. table.concat(bad, "; "))
+  ns.Settings.Toggle()
+end
+
 -- M7: Blizzard aura bridge, overlays, cast bars
 inRaid, groupSize, inGroup = false, 2, true
 fire("GROUP_ROSTER_UPDATE")
@@ -738,6 +774,51 @@ check(not overReserved(), "still within reserved icons after a settings change")
 ns.profile.frames.target.auras.max = 16
 ns.AuraBridge.LayoutTarget()
 ns.AuraBridge.Report()
+-- mana ticks: found by timing power events, never by reading mana
+do
+  local MT = ns.ManaTicks
+  local pb2 = ns.Frames.byKey.player
+  local clock = 500
+  MT.Now = function() return clock end
+  local function power() MT.OnEvent("UNIT_POWER_UPDATE", "player", "MANA") end
+  check(pb2.manaTick and pb2.fiveRule and pb2.manaCost, "player power bar has tick spark, 5s spark and cost shade")
+  check(pb2.manaTick.move._dur == 2 and pb2.manaTick.move._offset ~= nil, "tick spark sweeps the bar every 2s")
+  power()                       -- first tick: phase unknown
+  check(not MT.state.locked and not pb2.manaTick._shown, "one tick isn't enough to lock the phase")
+  clock = 502.05 power()        -- 2s later: locked
+  check(MT.state.locked and pb2.manaTick._shown and pb2.manaTick.ag._playing, "two ticks 2s apart lock it and the spark runs")
+  clock = 503 power()           -- a gain between ticks (potion): ignored
+  check(MT.state.locked and MT.state.lastTick == 502.05, "an extra gain between ticks keeps the phase")
+  -- casting a 50-mana spell (max 100) shades half the bar from the fill's edge
+  C_Spell.GetSpellPowerCost = function() return { { type = 0, cost = 50 } } end
+  clock = 503.5
+  MT.OnEvent("UNIT_SPELLCAST_START", "player", "guid", 635)
+  local bw = pb2.power:GetWidth()
+  check(pb2.manaCost._shown and math.abs((pb2.manaCost._w or 0) - bw / 2) < 0.01, "cast cost shades the right share of the bar")
+  check(pb2.manaCost._anchors.TOPRIGHT and pb2.manaCost._anchors.TOPRIGHT.rel == pb2.power:GetStatusBarTexture(), "cost shade ends at the mana fill's edge")
+  clock = 505
+  MT.OnEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "guid", 635)
+  check(not pb2.manaCost._shown, "cost shade goes when the cast ends")
+  check(pb2.fiveRule._shown and pb2.fiveRule.ag._playing and not pb2.manaTick._shown, "a paid cast starts the 5-second rule spark (tick spark waits)")
+  clock = 505.2 power()         -- the cast's own cost: not a tick
+  check(MT.state.lastTick == 502.05, "the cast's mana cost isn't counted as a tick")
+  clock = 510.2
+  pb2.fiveRule.ag._scripts.OnFinished()
+  check(not pb2.fiveRule._shown and pb2.manaTick._shown, "after 5s the tick spark is back")
+  -- free spell: no 5-second rule
+  C_Spell.GetSpellPowerCost = function() return {} end
+  MT.OnEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "guid", 1)
+  check(not pb2.fiveRule._shown, "a free spell doesn't start the 5-second rule")
+  -- toggles
+  ns.profile.frames.player.manaTicks.ticks = false
+  MT.Refresh()
+  check(not pb2.manaTick._shown, "tick spark can be turned off")
+  ns.profile.frames.player.manaTicks.ticks = true
+  MT.Refresh()
+  check(next(MT.intervals) ~= nil, "tick intervals are recorded for the probe")
+  C_Spell.GetSpellPowerCost = nil
+  MT.Now = function() return GetTime() end
+end
 -- status icon: ready check > summon > incoming res
 READY, SUMMON, RES = {}, {}, {}
 function GetReadyCheckStatus(u) return READY[u] end

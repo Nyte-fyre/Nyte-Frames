@@ -42,6 +42,8 @@ local function frameDefaults(t)
                  threat = true, dispelHighlight = true, dispelMode = "mine", dispelColor = "debuff",
                  dispelPulse = false, dispelBorder = false, rangeFade = false },
     icons = { raidTarget = true, leader = true, role = false, status = true }, -- status: ready check / summon / res
+    -- player power bar only: regen tick spark, 5-second rule spark, cast cost shade
+    manaTicks = { ticks = true, fiveSecond = true, cost = true },
   }
   for k, v in pairs(t) do base[k] = v end
   return base
