@@ -145,13 +145,23 @@ end
 local function build()
   window = CreateFrame("Frame", "NyteFramesSettings", UIParent)
   window:SetSize(500, 545)
-  window:SetPoint("CENTER")
+  -- pinned by its top edge: pages differ in height, and a center anchor
+  -- would move the tab row every time the height changes
+  window:SetPoint("TOP", UIParent, "TOP", 0, -120)
   window:SetFrameStrata("DIALOG")
   window:SetMovable(true)
   window:EnableMouse(true)
   window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart", window.StartMoving)
-  window:SetScript("OnDragStop", window.StopMovingOrSizing)
+  window:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    -- dragging re-anchors by whatever point WoW picks; pin the top-left again
+    local l, t = self:GetLeft(), self:GetTop()
+    if l and t then
+      self:ClearAllPoints()
+      self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", l, t)
+    end
+  end)
   window:SetClampedToScreen(true)
   flatBG(window, 0.05, 0.05, 0.07, 0.96)
   tinsert(UISpecialFrames, "NyteFramesSettings") -- Escape closes it

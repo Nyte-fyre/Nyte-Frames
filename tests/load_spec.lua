@@ -669,6 +669,12 @@ do
     end
   end
   check(#bad == 0, "settings pages have no overlapping controls: " .. table.concat(bad, "; "))
+  local win = _G.NyteFramesSettings
+  check(win._anchors and win._anchors.TOP and not win._point, "settings window is pinned by its top (tabs don't move between pages)")
+  win.GetLeft = function() return 300 end
+  win.GetTop = function() return 900 end
+  win._scripts.OnDragStop(win)
+  check(win._anchors.TOPLEFT and win._anchors.TOPLEFT.rp == "BOTTOMLEFT", "after a drag it's pinned by its top-left")
   ns.Settings.Toggle()
 end
 
