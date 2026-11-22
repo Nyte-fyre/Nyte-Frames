@@ -1,0 +1,23 @@
+# Builds the addon zip and uploads it to CurseForge when a version tag is
+# pushed (e.g. v0.16.0). Tags without "alpha"/"beta" upload as Release.
+# Needs the repo secret CF_API_KEY and "## X-Curse-Project-ID" in the TOC.
+name: Package and release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: BigWigsMods/packager@v2

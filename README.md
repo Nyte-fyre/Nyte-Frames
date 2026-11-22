@@ -3,31 +3,47 @@
 Flat, resizable unit frames for **WoW: Forever**. Party and raid frames sit above
 your player frame, sorted tank, healer, DPS, and grow to the left as groups are added.
 
-**Status: v0.8.0, milestone 8: all frames incl. boss stack, Blizzard-drawn auras, cast bars, overlays.** The probe still
-records what the client lets addons read.
+## Features
+
+- Player, target, target of target (and its target), focus, pet, party, raid (25) and boss frames
+- Party and raid columns sorted by role; roles follow the group role picker, talents and raid flags
+- Heal prediction, absorbs, threat border, range fade, raid marker, leader, ready check / summon / res icons
+- Debuff highlight (dispel tint, bigger boss debuffs) using Blizzard's own aura display, so it works in combat
+- Cast bars with a latency zone; mana tick and five-second-rule sparks on the player power bar
+- Drag, resize, grid and snap in `/nf unlock`; profiles with import/export strings
+- Border thickness, name colors, text formats, textures and fonts (LibSharedMedia)
+- Optional Masque skins for the buff row and cast bar icons
+- Translatable (see `Locales/`)
 
 ## Commands
 
-- `/nf` or `/nyteframes` - settings (`/nf help` for commands)
+- `/nf` or `/nyteframes` - settings (`/nf help` lists every command)
 - `/nf unlock` / `/nf lock` - drag, resize (corner), grid, snap, arrow-key nudge
 - `/nf role [name] tank|healer|dps|auto` - set a role (or Shift+right-click a party/raid frame)
-- `/nf probe` - probe status (it records by itself)
-- `/nf probe now` - take a snapshot now
-- `/nf probe inspect` - test talent inspection on your target
-- `/nf probe off | on | reset`
-- `/nf auras` - status of the Blizzard aura icons shown on Nyte frames
+- `/nf role refresh` - re-check everyone's talents after a respec
+- `/nf profiles` - switch, copy, rename, delete or reset profiles
+- `/nf export` / `/nf import` - share settings as a `NYTEFRAMES1:` string
+- `/nf blizzard` - which Blizzard frames are hidden or showing
 - `/nf errors` - errors the addon caught
-- `/nf profile` - the active profile
+
+## Translating
+
+`Locales/_template.lua` lists every string. Copy it to `Locales/<code>.lua`
+(for example `deDE.lua`), set the code in `NF.NewLocale("deDE")`, translate the
+right-hand sides (keep `%s` / `%d`), and add the file to `NyteFrames.toc` after
+`Core\Locale.lua`. Untranslated lines fall back to English.
 
 ## Development
 
-- `python tests/run.py` runs the offline tests (needs `pip install lupa`), including
-  the raid sorting worked example.
-- `python tests/read_probe.py` summarizes the probe data from your SavedVariables.
+- `python tests/run.py` runs the offline tests (needs `pip install lupa`).
+- `python tools/locale_keys.py` rebuilds the translation template.
+- `python tests/read_probe.py` summarizes the API probe data from your SavedVariables.
 - `powershell -ExecutionPolicy Bypass -File tools\install.ps1` links the repo into
   the Forever AddOns folder.
+- Releases: pushing a `v*` tag builds the zip with the BigWigs packager and uploads it
+  to CurseForge (`.github/workflows/release.yml`).
 
-## Libraries
+## License
 
-LibStub, CallbackHandler-1.0, LibSharedMedia-3.0, LibSerialize, LibDeflate, each
-under its own license in `Libs/`.
+MIT, see `LICENSE`. Bundled libraries (LibStub, CallbackHandler-1.0,
+LibSharedMedia-3.0, LibSerialize, LibDeflate) keep their own licenses in `Libs/`.

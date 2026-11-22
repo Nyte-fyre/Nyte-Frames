@@ -1,0 +1,14 @@
+# BigWigs packager settings (https://github.com/BigWigsMods/packager)
+package-as: NyteFrames
+
+# libraries are bundled in Libs/, no externals
+
+ignore:
+  - tests
+  - tools
+  - docs
+  - Locales/_template.lua
+  - README.md
+  - .github
+  - CLAUDE.md
+  - private
