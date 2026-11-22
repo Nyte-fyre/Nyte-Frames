@@ -60,7 +60,7 @@ end
 
 function OV.Layout(b, w, h)
   OV.Anchor(b)
-  local barW = math.max(1, w - 2)
+  local barW = math.max(1, w - 2 * NF.UnitButton.BorderSize())
   b.healPred:SetWidth(barW)
   b.absorb:SetWidth(barW)
   local s = math.max(10, math.min(18, math.floor(h * 0.4)))

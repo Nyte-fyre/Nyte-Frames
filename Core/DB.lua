@@ -30,7 +30,7 @@ local function frameDefaults(t)
     refPos = { x = 0, y = 0 }, -- center offset in reference pixels
     powerHeightPct = 20,       -- 0 hides the power bar
     textMode = nil,            -- nil = use general.textMode
-    nameColor = "white",       -- "class" | "white" | "reaction" (white reads best on class-colored bars)
+    nameColor = "white",       -- white | black | gold | gray | class | reaction
     showName = true, showHealthText = true, showPowerText = false,
     auras = {
       buffs = true, debuffs = true, max = 8, size = 18, growth = "RIGHT",
@@ -38,6 +38,7 @@ local function frameDefaults(t)
       bigBossDebuffs = true, onlyDispellable = false,
     },
     castBar = false,
+    castLatency = true,        -- player cast bar: red latency zone at the end
     overlays = { healPrediction = true, healMineOnly = false, absorbs = true,
                  threat = true, dispelHighlight = true, dispelMode = "mine", dispelColor = "debuff",
                  dispelPulse = false, dispelBorder = false, rangeFade = false },
@@ -61,6 +62,7 @@ DB.DEFAULTS = {
     largePowerPct = 20,        -- default split for player/target
     hideBlizzardCastBar = true,
     blizzardAuras = true,      -- show Blizzard's own aura icons on our frames (works in combat)
+    borderSize = 2,            -- frame border thickness (1px lines can vanish at fractional UI scales)
   },
   frames = {
     player = frameDefaults({ width = 195, height = 60, refPos = { x = -271, y = -201 },

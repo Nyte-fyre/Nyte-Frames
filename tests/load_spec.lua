@@ -49,6 +49,7 @@ function FrameMethods.GetText(self) return self._text end
 function FrameMethods.SetAlphaFromBoolean(self, v, a, b) self._alphaFromBool = { a, b } end
 function FrameMethods.SetVertexColorFromBoolean(self) self._colorFromBool = true end
 function FrameMethods.SetVertexColor(self, r, g, b) self._color = { r, g, b } end
+function FrameMethods.SetTextColor(self, r, g, b) self._textColor = { r, g, b } end
 function FrameMethods.GetParent(self) return self._parent end
 -- like the client: no fill until SetStatusBarTexture, and each call may swap the object
 function FrameMethods.GetStatusBarTexture(self) return self._fill end
@@ -242,7 +243,7 @@ function UnitThreatSituation(u) return THREAT[u] end
 function UnitGetIncomingHeals() return secret(0) end
 function UnitGetTotalAbsorbs() return secret(0) end
 CASTING = {}
-function UnitCastingInfo(u) local c = CASTING[u] if c then return c.name, "", 136243, 0, 0, false, 1, c.notInt end end
+function UnitCastingInfo(u) local c = CASTING[u] if c then return c.name, "", 136243, c.startMS or 0, c.endMS or 0, false, 1, c.notInt end end
 function UnitCastingDuration(u) if CASTING[u] then return { GetRemainingDuration = function() return secret(1.2) end } end end
 function UnitChannelInfo() return nil end
 function GetRaidTargetIndex() return nil end
@@ -780,6 +781,52 @@ check(not overReserved(), "still within reserved icons after a settings change")
 ns.profile.frames.target.auras.max = 16
 ns.AuraBridge.LayoutTarget()
 ns.AuraBridge.Report()
+-- latency zone on the player cast bar
+do
+  local pcb = ns.Frames.byKey.player.castBar
+  check(pcb and pcb.latency, "player cast bar has a latency zone")
+  function GetNetStats() return 0, 0, 40, 150 end
+  CASTING.player = { name = "Flash of Light", startMS = 10000, endMS = 11500 }
+  ns.CastBar.Start(pcb)
+  check(pcb.latency._shown and math.abs(pcb.latencyWidth - pcb.barWidth * 150 / 1500) < 0.01,
+    "150ms lag on a 1.5s cast = a tenth of the bar, from world latency")
+  check(pcb.latency._anchors.TOPRIGHT and pcb.latency._anchors.TOPRIGHT.rel == pcb.latencyLayer,
+    "zone sits at the end of the cast, on its own layer")
+  ns.profile.frames.player.castLatency = false
+  ns.CastBar.Start(pcb)
+  check(not pcb.latency._shown, "latency zone can be turned off")
+  ns.profile.frames.player.castLatency = true
+  CASTING.player = { name = secret("x"), startMS = secret(1), endMS = secret(2) }
+  ns.CastBar.Start(pcb)
+  check(not pcb.latency._shown, "secret cast times: no zone, no error")
+  CASTING.player = nil
+  GetNetStats = nil
+  ns.CastBar.Start(pcb)
+  local tcb = ns.Frames.byKey.target.castBar
+  check(tcb and tcb.latency == nil, "only the player's cast bar gets one")
+end
+-- border thickness + name colors
+do
+  local pb3 = ns.Frames.byKey.player
+  check(pb3.borders[1]._h == 2 and pb3.borders[3]._w == 2, "border is 2px by default")
+  ns.profile.general.borderSize = 3
+  ns.UnitButton.Layout(pb3)
+  check(pb3.borders[2]._h == 3 and pb3.borders[4]._w == 3, "border follows the setting")
+  ns.profile.general.borderSize = 9
+  check(ns.UnitButton.BorderSize() == 4, "border is clamped to 4")
+  ns.profile.general.borderSize = 2
+  ns.UnitButton.Layout(pb3)
+  for _, c in ipairs({ { "black", 0, 0, 0 }, { "gold", 1, 0.82, 0 }, { "gray", 0.75, 0.75, 0.75 } }) do
+    ns.profile.frames.player.nameColor = c[1]
+    ns.UnitButton.UpdateColors(pb3)
+    local t = pb3.nameText._textColor
+    check(t and t[1] == c[2] and t[2] == c[3] and t[3] == c[4], "name color " .. c[1])
+  end
+  ns.profile.frames.player.nameColor = "white"
+  ns.UnitButton.UpdateColors(pb3)
+  local okImp = ns.ImportExport.ValidateProfile
+  check(ns.DB.DEFAULTS.general.borderSize == 2, "borderSize is a saved, importable setting")
+end
 -- mana ticks: found by timing power events, never by reading mana
 do
   local MT = ns.ManaTicks
@@ -789,7 +836,7 @@ do
   local function power() MT.OnEvent("UNIT_POWER_UPDATE", "player", "MANA") end
   check(pb2.manaTick and pb2.fiveRule and pb2.manaCost, "player power bar has tick spark, 5s spark and cost shade")
   check(pb2.manaTick.move._dur == 2 and pb2.manaTick.move._offset ~= nil, "tick spark sweeps the bar every 2s")
-  check(pb2.manaTick.move._offset == pb2:GetWidth() - 2, "the spark sweeps the full bar width, not the mana fill")
+  check(pb2.manaTick.move._offset == pb2:GetWidth() - 2 * ns.UnitButton.BorderSize(), "the spark sweeps the full bar width, not the mana fill")
   check(pb2.manaLayer ~= nil and pb2.manaTick._anchors.LEFT.rel == pb2.manaLayer, "spark rides its own layer over the bar, not the StatusBar")
   power()                       -- first tick: phase unknown
   check(not MT.state.locked and not pb2.manaTick._shown, "one tick isn't enough to lock the phase")
@@ -801,7 +848,7 @@ do
   C_Spell.GetSpellPowerCost = function() return { { type = 0, cost = 50 } } end
   clock = 503.5
   MT.OnEvent("UNIT_SPELLCAST_START", "player", "guid", 635)
-  local bw = pb2:GetWidth() - 2
+  local bw = pb2:GetWidth() - 2 * ns.UnitButton.BorderSize()
   check(pb2.manaCost._shown and math.abs((pb2.manaCost._w or 0) - bw / 2) < 0.01, "cast cost shades the right share of the bar")
   check(pb2.manaCost._anchors.TOPRIGHT and pb2.manaCost._anchors.TOPRIGHT.rel == pb2.power:GetStatusBarTexture(), "cost shade ends at the mana fill's edge")
   clock = 505

@@ -49,14 +49,50 @@ local function runTimer(bar, duration, channel)
   return pcall(bar.SetTimerDuration, bar, duration)
 end
 
+-- Player cast bar: a red zone as long as your latency at the end the cast
+-- finishes (right for casts, left for channels, which drain). Once the cast
+-- is inside it you can queue the next one. Player cast times are plain
+-- numbers (probe); for anyone else this stays hidden.
+function CB.LatencyMS()
+  if not GetNetStats then return nil end
+  local ok, _, _, home, world = pcall(GetNetStats)
+  if not ok then return nil end
+  home, world = Plain(home), Plain(world)
+  local ms = type(world) == "number" and world or home
+  if type(ms) ~= "number" or ms <= 0 then return nil end
+  return ms
+end
+
+function CB.UpdateLatency(bar, startMS, endMS, channel)
+  local z = bar.latency
+  if not z then return end
+  z:Hide()
+  if bar.unit ~= "player" or not NF.profile.frames.player.castLatency then return end
+  startMS, endMS = Plain(startMS), Plain(endMS)
+  local lag = CB.LatencyMS()
+  if type(startMS) ~= "number" or type(endMS) ~= "number" or not lag then return end
+  local dur = endMS - startMS
+  if dur <= 0 then return end
+  local w = bar.barWidth or 0
+  local zw = math.max(1, math.min(w, w * lag / dur))
+  z:ClearAllPoints()
+  local side = channel and "LEFT" or "RIGHT"
+  z:SetPoint("TOP" .. side, bar.latencyLayer, "TOP" .. side)
+  z:SetPoint("BOTTOM" .. side, bar.latencyLayer, "BOTTOM" .. side)
+  z:SetWidth(zw)
+  z:Show()
+  bar.latencyWidth = zw
+end
+
 function CB.Start(bar)
   local u = bar.unit
   local channel = false
-  local okC, name, _, texture, _, _, _, _, notInt = pcall(UnitCastingInfo, u)
+  local okC, name, _, texture, startMS, endMS, _, _, notInt = pcall(UnitCastingInfo, u)
   if not (okC and present(name)) then
-    local okH, cname, _, ctex, _, _, _, cnotInt = pcall(UnitChannelInfo, u)
+    local okH, cname, _, ctex, cstart, cend, _, cnotInt = pcall(UnitChannelInfo, u)
     if not (okH and present(cname)) then bar:Hide() return end
     name, texture, notInt, channel = cname, ctex, cnotInt, true
+    startMS, endMS = cstart, cend
   end
   local duration = channel and Try(UnitChannelDuration, u) or Try(UnitCastingDuration, u)
   if not runTimer(bar, duration, channel) then bar:Hide() return end
@@ -64,6 +100,7 @@ function CB.Start(bar)
   if not pcall(bar.text.SetText, bar.text, name) then bar.text:SetText("") end
   if not pcall(bar.icon.SetTexture, bar.icon, texture) then bar.icon:SetTexture(nil) end
   color(bar, notInt, channel and CB.COLOR_CHANNEL or CB.COLOR_CAST)
+  CB.UpdateLatency(bar, startMS, endMS, channel)
   bar.elapsed = 1
   bar:Show()
 end
@@ -101,6 +138,15 @@ function CB.Create(b)
   bar.text:SetPoint("LEFT", 3, 0)
   bar.text:SetJustifyH("LEFT")
   bar.text:SetWordWrap(false)
+  -- latency zone: its own layer (a bar's own textures only show over the fill)
+  if b.key == "player" then
+    bar.latencyLayer = CreateFrame("Frame", nil, bar)
+    bar.latencyLayer:SetAllPoints(bar)
+    bar.latency = bar.latencyLayer:CreateTexture(nil, "OVERLAY")
+    bar.latency:SetTexture(FLAT)
+    bar.latency:SetVertexColor(1, 0.15, 0.1, 0.55)
+    bar.latency:Hide()
+  end
   bar.time = bar:CreateFontString(nil, "OVERLAY")
   bar.time:SetPoint("RIGHT", -3, 0)
   for _, fs in ipairs({ bar.text, bar.time }) do fs:SetShadowOffset(1, -1) end
@@ -128,6 +174,7 @@ function CB.Layout(b)
   bar:ClearAllPoints()
   bar:SetPoint("TOPLEFT", b, "BOTTOMLEFT", icon + 2, -3)
   bar:SetSize(math.max(20, w - icon - 2), HEIGHT)
+  bar.barWidth = math.max(20, w - icon - 2)
   bar.icon:SetSize(icon, icon)
   local font = NF.Media.Font(NF.profile.general.font)
   bar.text:SetFont(font, 10, "")

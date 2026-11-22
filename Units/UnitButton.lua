@@ -138,7 +138,7 @@ function UB.Create(key, unit, globalName)
   b.bg = edge(b, "BACKGROUND")
   b.bg:SetAllPoints()
   b.bg:SetVertexColor(0.06, 0.06, 0.07, 0.9)
-  -- 1px black border
+  -- black border (thickness set in Layout: general.borderSize)
   b.borders = {}
   for i, pts in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" },
                          { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
@@ -146,7 +146,6 @@ function UB.Create(key, unit, globalName)
     t:SetVertexColor(0, 0, 0, 1)
     t:SetPoint(pts[1])
     t:SetPoint(pts[2])
-    if i <= 2 then t:SetHeight(1) else t:SetWidth(1) end
     b.borders[i] = t
   end
 
@@ -241,6 +240,15 @@ function UB.SetRole(b, role)
     b.roleText:Show()
   end
 end
+-- border thickness in UI units (bars sit inside it)
+function UB.BorderSize()
+  local n = tonumber(general().borderSize) or 2
+  return math.max(1, math.min(4, math.floor(n)))
+end
+
+-- Fixed name colors (class / reaction are worked out per unit)
+UB.NAME_COLORS = { white = { 1, 1, 1 }, black = { 0, 0, 0 }, gold = { 1, 0.82, 0 }, gray = { 0.75, 0.75, 0.75 } }
+
 function UB.Layout(b)
   local cfg, g = cfgOf(b), general()
   local w, h = cfg.width, cfg.height
@@ -253,16 +261,20 @@ function UB.Layout(b)
     UB.Place(b)
   end)
 
-  local inner = h - 2
+  local bs = UB.BorderSize()
+  for i, t in ipairs(b.borders) do
+    if i <= 2 then t:SetHeight(bs) else t:SetWidth(bs) end
+  end
+  local inner = h - 2 * bs
   local powerH = (pct > 0) and math.max(1, math.floor(inner * pct / 100 + 0.5)) or 0
   local gap = powerH > 0 and 1 or 0
   b.health:ClearAllPoints()
-  b.health:SetPoint("TOPLEFT", 1, -1)
-  b.health:SetPoint("TOPRIGHT", -1, -1)
+  b.health:SetPoint("TOPLEFT", bs, -bs)
+  b.health:SetPoint("TOPRIGHT", -bs, -bs)
   b.health:SetHeight(math.max(1, inner - powerH - gap))
   b.power:ClearAllPoints()
-  b.power:SetPoint("BOTTOMLEFT", 1, 1)
-  b.power:SetPoint("BOTTOMRIGHT", -1, 1)
+  b.power:SetPoint("BOTTOMLEFT", bs, bs)
+  b.power:SetPoint("BOTTOMRIGHT", -bs, bs)
   b.power:SetHeight(math.max(1, powerH))
   b.power:SetShown(powerH > 0)
 
@@ -379,7 +391,14 @@ function UB.UpdateColors(b)
   elseif mode == "reaction" then
     b.nameText:SetTextColor(rc[1], rc[2], rc[3])
   else
-    b.nameText:SetTextColor(1, 1, 1)
+    local c = UB.NAME_COLORS[mode] or UB.NAME_COLORS.white
+    b.nameText:SetTextColor(c[1], c[2], c[3])
+  end
+  -- a dark name needs a light shadow to stay readable on dark bars
+  if mode == "black" then
+    b.nameText:SetShadowColor(1, 1, 1, 0.35)
+  else
+    b.nameText:SetShadowColor(0, 0, 0, 1)
   end
 end
 

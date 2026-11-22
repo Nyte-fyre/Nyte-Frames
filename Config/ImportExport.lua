@@ -23,7 +23,7 @@ local LibDeflate = LibStub and LibStub("LibDeflate", true)
 ---------------------------------------------------------------------------
 local ENUMS = {
   textMode = { percent = true, number = true, both = true },
-  nameColor = { class = true, white = true, reaction = true },
+  nameColor = { class = true, white = true, reaction = true, black = true, gold = true, gray = true },
   growth = { LEFT = true, RIGHT = true, UP = true, DOWN = true },
   dispelMode = { mine = true, all = true },
   dispelColor = { debuff = true, black = true },
@@ -31,7 +31,7 @@ local ENUMS = {
 local RANGES = {
   width = { 10, 2000 }, height = { 4, 1000 }, powerHeightPct = { 0, 100 },
   size = { 4, 100 }, max = { 0, 40 }, maxColumnsPerRow = { 1, 8 },
-  fontSize = { 4, 64 }, rangeAlpha = { 0, 1 }, grid = { 2, 200 }, spacing = { 0, 100 },
+  fontSize = { 4, 64 }, borderSize = { 1, 4 }, rangeAlpha = { 0, 1 }, grid = { 2, 200 }, spacing = { 0, 100 },
   smallPowerPct = { 0, 100 }, largePowerPct = { 0, 100 },
 }
 local ROLES = { TANK = true, HEALER = true, DAMAGER = true }

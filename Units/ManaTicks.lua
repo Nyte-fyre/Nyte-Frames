@@ -77,7 +77,7 @@ function MT.Layout(b)
   MT.Attach(b)
   -- full bar width from the button's own size (the bar is inset 1px each
   -- side); never the fill, which follows current mana
-  local w = math.max(1, (b:GetWidth() or 2) - 2)
+  local w = math.max(1, (b:GetWidth() or 2) - 2 * NF.UnitButton.BorderSize())
   local h = b.power:GetHeight()
   b.manaLayer:SetShown(b.power:IsShown())
   for _, s in ipairs({ b.manaTick, b.fiveRule }) do
@@ -178,7 +178,7 @@ function MT.OnCastStart(spellID)
   if not (c.cost and powerKind() == "mana") then b.manaCost:Hide() return end
   local cost = costOf(spellID)
   local max = Plain(Try(UnitPowerMax, "player", 0))
-  local w = math.max(1, (b:GetWidth() or 2) - 2)
+  local w = math.max(1, (b:GetWidth() or 2) - 2 * NF.UnitButton.BorderSize())
   if not (cost and cost > 0 and type(max) == "number" and max > 0 and type(w) == "number") then
     b.manaCost:Hide()
     return

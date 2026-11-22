@@ -182,6 +182,18 @@ local function build()
     function() return NF.profile.general.textMode end,
     function(v) NF.profile.general.textMode = v NF.Frames.Refresh() end)
   widgets.textMode:SetPoint("TOPLEFT", 14, y)
+  widgets.border = cycle(window, "Border",
+    { { 1, "1 px" }, { 2, "2 px" }, { 3, "3 px" }, { 4, "4 px" } },
+    function() return NF.UnitButton.BorderSize() end,
+    function(v)
+      NF.profile.general.borderSize = v
+      NF.Frames.Refresh()
+      for _, m in ipairs({ NF.Party, NF.Raid, NF.Boss }) do if m and m.Apply then pcall(m.Apply) end end
+    end)
+  widgets.border:SetWidth(230)
+  widgets.border.button:ClearAllPoints()
+  widgets.border.button:SetPoint("LEFT", 60, 0)
+  widgets.border:SetPoint("TOPLEFT", 270, y)
   widgets.abbrev = checkbox(window, "Abbreviate numbers (12.3k)",
     function() return NF.profile.general.abbreviate end,
     function(v) NF.profile.general.abbreviate = v NF.Frames.Refresh() end)
@@ -233,6 +245,8 @@ local function build()
   local function tickSet(field)
     return function(v) cfg().manaTicks[field] = v NF.ManaTicks.Refresh() end
   end
+  extra("castLatency", "Latency on cast bar", function() return cfg().castLatency end,
+    function(v) cfg().castLatency = v end, 0)
   extra("manaTick", "Mana / energy tick spark", function() return cfg().manaTicks.ticks end, tickSet("ticks"), 0)
   extra("fiveRule", "5-second rule spark", function() return cfg().manaTicks.fiveSecond end, tickSet("fiveSecond"), 0)
   extra("manaCost", "Spell cost on mana bar", function() return cfg().manaTicks.cost end, tickSet("cost"), 0)
@@ -317,7 +331,8 @@ local function build()
     function(v) cfg().textMode = (v ~= "global") and v or nil changed() end)
   widgets.frameText:SetPoint("TOPLEFT", 14, py - 160)
   widgets.nameColor = cycle(window, "Name color",
-    { { "white", "White" }, { "class", "Class" }, { "reaction", "Reaction" } },
+    { { "white", "White" }, { "black", "Black" }, { "gold", "Gold" }, { "gray", "Gray" },
+      { "class", "Class" }, { "reaction", "Reaction" } },
     function() return cfg().nameColor end, function(v) cfg().nameColor = v changed() end)
   widgets.nameColor:SetPoint("TOPLEFT", 14, py - 188)
   widgets.powerText = checkbox(window, "Show power text",
@@ -355,7 +370,7 @@ local LEFT_COL = { { "width", "slider" }, { "height", "slider" }, { "power", "sl
 local RIGHT_COL = { { "castBar", "check" }, { "buffs", "check" }, { "debuffs", "check" },
   { "healPred", "check" }, { "absorbs", "check" }, { "threat", "check" }, { "range", "check" },
   { "roleIcon", "check" }, { "statusIcon", "check" },
-  { "manaTick", "check" }, { "fiveRule", "check" }, { "manaCost", "check" }, { "gap", 10 }, { "auraSize", "slider" },
+  { "castLatency", "check" }, { "manaTick", "check" }, { "fiveRule", "check" }, { "manaCost", "check" }, { "gap", 10 }, { "auraSize", "slider" },
   { "auraMax", "slider" }, { "hlButton", "button" } }
 local STEP = { check = 22, cycle = 28, slider = 44, button = 30 }
 -- drawn width of each kind (slider: bar + value text), for the overlap test
@@ -432,7 +447,7 @@ function Settings.Show(key)
   widgets.auraMax:SetShown(auras)
   widgets.hlButton:SetShown(auras)
   widgets.statusIcon:SetShown(current ~= "boss")
-  for _, n in ipairs({ "manaTick", "fiveRule", "manaCost" }) do widgets[n]:SetShown(current == "player") end
+  for _, n in ipairs({ "castLatency", "manaTick", "fiveRule", "manaCost" }) do widgets[n]:SetShown(current == "player") end
   if not auras then widgets.hlPanel:Hide() end
   -- frame coloring only on group frames; bigger / only-dispellable apply to all icons
   local pageLabel = current
