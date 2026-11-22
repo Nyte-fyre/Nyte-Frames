@@ -12,7 +12,8 @@ local FLAT = "Interface\\Buttons\\WHITE8X8"
 OV.EVENTS = {
   UNIT_HEAL_PREDICTION = "UpdateBars", UNIT_ABSORB_AMOUNT_CHANGED = "UpdateBars",
   UNIT_HEAL_ABSORB_AMOUNT_CHANGED = "UpdateBars", UNIT_MAXHEALTH = "UpdateBars",
-  UNIT_HEALTH = "UpdateBars",
+  -- no UNIT_HEALTH: the bars are anchored to the health fill's edge and move
+  -- with it; their own values don't depend on current health
   UNIT_THREAT_SITUATION_UPDATE = "UpdateThreat", UNIT_IN_RANGE_UPDATE = "UpdateRange",
 }
 

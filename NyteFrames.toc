@@ -2,7 +2,7 @@
 ## Title: Nyte Frames
 ## Notes: Flat, resizable unit frames with role-sorted party and raid columns.
 ## Author: Nyte
-## Version: 0.9.0
+## Version: 0.10.0
 ## SavedVariables: NyteFramesDB, NyteFramesProbeDB
 ## SavedVariablesPerCharacter: NyteFramesCharDB
 
@@ -13,6 +13,7 @@ Libs\LibSerialize\lib.xml
 Libs\LibDeflate\lib.xml
 
 Core\Init.lua
+Core\Perf.lua
 Core\Compat.lua
 Core\DB.lua
 Core\Media.lua

@@ -18,14 +18,20 @@ Blizzard.MAP = {
   party = { "PartyFrame", "CompactPartyFrame" },
   raid = { "CompactRaidFrameContainer", "CompactRaidFrameManager" },
   boss = { "BossTargetFrameContainer" },
+  focus = { "FocusFrame" },
+  pet = { "PetFrame" },
   -- targettargettarget: Blizzard has no frame for it
 }
 
 Blizzard.hidden = {}
 
+-- Safe to call again: a frame Blizzard re-parented (Edit Mode does this to
+-- some) or created late (raid-style party frames) is hidden again.
 local function hideOne(name)
   local f = _G[name]
-  if not f or Blizzard.hidden[name] then return end
+  if not f then return end
+  local okP, parent = pcall(f.GetParent, f)
+  if Blizzard.hidden[name] and okP and parent == hiddenParent then return end
   pcall(f.UnregisterAllEvents, f)
   pcall(f.Hide, f)
   pcall(f.SetParent, f, hiddenParent)
@@ -51,6 +57,44 @@ function Blizzard.ApplyCastBar()
     hideOne("PlayerCastingBarFrame")
     hideOne("CastingBarFrame")
   end
+end
+
+-- Frames can appear or be re-parented later (Edit Mode layout loads, raid-style
+-- party frames are created on first group): re-check out of combat.
+for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "EDIT_MODE_LAYOUTS_UPDATED" }) do
+  NF.On(e, function() if NF.profile then Blizzard.Apply() end end)
+end
+
+-- /nf blizzard: which Blizzard frame is hidden, shown or missing.
+function Blizzard.Status()
+  local rows = {}
+  local keys = {}
+  for key in pairs(Blizzard.MAP) do keys[#keys + 1] = key end
+  table.sort(keys)
+  local function state(name, wanted)
+    local f = _G[name]
+    if not f then return "|cff888888not on this client|r" end
+    local okV, visible = pcall(f.IsVisible, f)
+    local okP, parent = pcall(f.GetParent, f)
+    local hidden = okP and parent == hiddenParent
+    if wanted then
+      if hidden and not (okV and visible) then return "|cff8be28bhidden|r" end
+      return "|cffff6060SHOWING (should be hidden)|r"
+    end
+    return (okV and visible) and "shown (Blizzard's)" or "not showing (normal when there's no unit)"
+  end
+  for _, key in ipairs(keys) do
+    local wanted = NF.profile.frames[key] and NF.profile.frames[key].enabled
+    for _, name in ipairs(Blizzard.MAP[key]) do
+      rows[#rows + 1] = string.format("  %s (%s): %s", name, wanted and "Nyte on" or "Nyte off", state(name, wanted))
+    end
+  end
+  local p = NF.profile.frames.player
+  local castWanted = p.enabled and p.castBar and NF.profile.general.hideBlizzardCastBar
+  for _, name in ipairs({ "PlayerCastingBarFrame", "CastingBarFrame" }) do
+    if _G[name] then rows[#rows + 1] = string.format("  %s (cast bar): %s", name, state(name, castWanted)) end
+  end
+  return rows
 end
 
 -- Ask for a reload after an Enabled toggle.

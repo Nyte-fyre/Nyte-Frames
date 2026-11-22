@@ -441,14 +441,31 @@ function UB.UpdateAll(b)
   NF.Overlays.UpdateAll(b)
 end
 
+-- UNIT_FLAGS fires for every unit entering/leaving combat, so in a raid it's
+-- one of the busiest events. Only a dead/ghost/offline change needs a redraw.
+function UB.UpdateFlags(b)
+  local state = unitState(b.unit)
+  if state ~= b.lastState then UB.UpdateAll(b) end
+end
+
 local HANDLERS = {
   UNIT_HEALTH = UB.UpdateHealth, UNIT_MAXHEALTH = UB.UpdateHealth,
   UNIT_POWER_UPDATE = UB.UpdatePower, UNIT_MAXPOWER = UB.UpdatePower,
   UNIT_DISPLAYPOWER = UB.UpdatePower, UNIT_NAME_UPDATE = UB.UpdateName,
-  UNIT_CONNECTION = UB.UpdateAll, UNIT_FLAGS = UB.UpdateAll, UNIT_FACTION = UB.UpdateColors,
+  UNIT_CONNECTION = UB.UpdateAll, UNIT_FLAGS = UB.UpdateFlags, UNIT_FACTION = UB.UpdateColors,
 }
 
 function UB.OnEvent(b, event)
+  -- hidden buttons (empty raid slots, party frames while in a raid) do no
+  -- work; OnShow runs a full update when they appear
+  if b.unit ~= "player" and not b:IsShown() then return end
+  local perf = NF.Perf.on
+  local t0 = perf and NF.Perf.Now()
+  UB.Dispatch(b, event)
+  if perf then NF.Perf.Add(event .. " (" .. b.key .. ")", NF.Perf.Now() - t0) end
+end
+
+function UB.Dispatch(b, event)
   local fn = HANDLERS[event]
   if fn then
     local ok, err = pcall(fn, b)

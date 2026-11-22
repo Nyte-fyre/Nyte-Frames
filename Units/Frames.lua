@@ -11,6 +11,8 @@ Frames.SINGLE = {
   { key = "target", unit = "target" },
   { key = "targettarget", unit = "targettarget" },
   { key = "targettargettarget", unit = "targettargettarget", poll = 0.1 },
+  { key = "focus", unit = "focus" },   -- off by default
+  { key = "pet", unit = "pet" },       -- off by default
 }
 Frames.byKey = {}
 
@@ -28,6 +30,10 @@ function Frames.ScaleFrame(cfg)
   local s = scale() or 1
   cfg.width = math.floor(cfg.width * s + 0.5)
   cfg.height = math.floor(cfg.height * s + 0.5)
+  if cfg.offset then
+    cfg.offset.x = math.floor((cfg.offset.x or 0) * s + 0.5)
+    cfg.offset.y = math.floor((cfg.offset.y or 0) * s + 0.5)
+  end
   if cfg.refPos and not cfg.pos then
     cfg.pos = { point = "CENTER", relPoint = "CENTER",
       x = math.floor(cfg.refPos.x * s + 0.5), y = math.floor(cfg.refPos.y * s + 0.5) }
@@ -58,8 +64,11 @@ local function spawn(def)
       elapsed = elapsed + e
       if elapsed < def.poll then return end
       elapsed = 0
+      local perf = NF.Perf.on
+      local t0 = perf and NF.Perf.Now()
       local ok, err = pcall(UB.UpdateAll, self)
       if not ok then NF.Error("poll " .. self.key, err) end
+      if perf then NF.Perf.Add("ToToT poll", NF.Perf.Now() - t0) end
     end)
   end
 end
@@ -142,6 +151,18 @@ NF.On("UNIT_TARGET", function(_, unit)
   if NF.Compat.IsSecret(unit) then return end
   if unit == "target" then updateChain(2)
   elseif unit == "targettarget" then updateChain(3) end
+end)
+
+local function updateKey(key)
+  local b = Frames.byKey[key]
+  if b then
+    local ok, err = pcall(UB.UpdateAll, b)
+    if not ok then NF.Error("update " .. key, err) end
+  end
+end
+NF.On("PLAYER_FOCUS_CHANGED", function() updateKey("focus") end)
+NF.On("UNIT_PET", function(_, unit)
+  if not NF.Compat.IsSecret(unit) and unit == "player" then updateKey("pet") end
 end)
 
 NF.On("PLAYER_ENTERING_WORLD", function() Frames.UpdateAll() end)

@@ -77,14 +77,16 @@ DB.DEFAULTS = {
       powerHeightPct = 15 }),
     -- party/raid: Blizzard raid-frame scale (~95x45 per member in the reference)
     party = frameDefaults({ width = 95, height = 45, powerHeightPct = 10, spacing = 2,
-      offset = { x = 0, y = 0 },  -- shift of the whole group from its spot above the player frame
+      -- shift of the whole group from its spot above the player frame; the
+      -- reference screenshot has the group frames ~20px above the player frame
+      offset = { x = 0, y = 18 },
       overlays = { healPrediction = true, healMineOnly = false, absorbs = true, threat = true,
                    dispelHighlight = true, rangeFade = true },
       icons = { raidTarget = true, leader = true, role = true },
       auras = { buffs = false, debuffs = true, max = 3, size = 14, growth = "LEFT",
         onlyMine = false, hideLong = true, dispellableFirst = true, filter = {} } }),
     raid = frameDefaults({ width = 95, height = 45, powerHeightPct = 10, spacing = 2,
-      offset = { x = 0, y = 0 },
+      offset = { x = 0, y = 18 },
       maxColumnsPerRow = 8,
       overlays = { healPrediction = true, healMineOnly = false, absorbs = true, threat = true,
                    dispelHighlight = true, rangeFade = true },

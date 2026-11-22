@@ -165,11 +165,13 @@ function GetThreatStatusColor(s) if s == 3 then return 1, 0, 0 end return 1, 1, 
 TargetFrameToT = CreateFrame("Frame", "TargetFrameToT")
 UISpecialFrames = {}
 BossTargetFrameContainer = CreateFrame("Frame", "BossTargetFrameContainer")
+FocusFrame = CreateFrame("Frame", "FocusFrame")
+PetFrame = CreateFrame("Frame", "PetFrame")
 tinsert = table.insert
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 unpack = unpack or table.unpack
 watched = {}
-function RegisterUnitWatch(f) watched[f] = true end
+function RegisterUnitWatch(f) watched[f] = true f._shown = true end -- the game shows it while the unit exists
 function UnregisterUnitWatch(f) watched[f] = nil end
 StaticPopupDialogs = {}
 function StaticPopup_Show(name) lastPopup = name end
@@ -406,7 +408,8 @@ check(watched[p1] and watched[p2] and not watched[p3] and not watched[p4], "only
 check(p1._point.y > p2._point.y, "first member sits on top")
 local pc, pl = ns.profile.frames.party, ns.profile.frames.player
 check(math.abs((p2._point.x + pc.width / 2) - (pl.pos.x + pl.width / 2)) < 0.01, "column right edge = player right edge " .. p2._point.x .. " " .. pc.width .. " " .. pl.pos.x .. " " .. pl.width .. " " .. tostring(pc.offset.x))
-check(math.abs((p2._point.y - pc.height / 2) - (pl.pos.y + pl.height / 2 + pc.spacing)) < 0.01, "column bottom sits on the player frame")
+check(math.abs((p2._point.y - pc.height / 2) - (pl.pos.y + pl.height / 2 + pc.spacing + pc.offset.y)) < 0.01, "column bottom sits just above the player frame")
+check(pc.offset.y > 0 and pc.offset.y <= 18, "default group gap scaled from the reference: " .. pc.offset.y)
 -- manual override flips the order
 ns.profile.roleOverrides["Zed Pal"] = "TANK"
 fire("GROUP_ROSTER_UPDATE")
@@ -740,6 +743,56 @@ do
   check(DB.ProfileName() == "Main", "/nf profile <name> switches")
   runTimers()
   check(type(NyteFramesDB.profiles.Default) == "table", "Default profile still there")
+end
+
+-- M10: Blizzard status, focus/pet, perf, event trimming
+do
+  check(FocusFrame._parent ~= ns.Blizzard.hiddenParent and PetFrame._parent ~= ns.Blizzard.hiddenParent, "focus/pet off by default: Blizzard's stay")
+  check(ns.Frames.byKey.focus == nil, "no Nyte focus frame while off")
+  local rows = ns.Blizzard.Status()
+  local joined = table.concat(rows, "\n")
+  check(joined:find("PlayerFrame (Nyte on): |cff8be28bhidden", 1, true) ~= nil, "status: PlayerFrame hidden")
+  check(joined:find("FocusFrame (Nyte off)", 1, true) ~= nil, "status lists FocusFrame as Blizzard's")
+  -- Blizzard re-parents a hidden frame: the next check hides it again
+  PlayerFrame._parent = UIParent
+  fire("EDIT_MODE_LAYOUTS_UPDATED") runTimers()
+  check(PlayerFrame._parent == ns.Blizzard.hiddenParent, "re-parented Blizzard frame hidden again")
+  -- turning focus on spawns it (after reload) and hides FocusFrame
+  ns.profile.frames.focus.enabled = true
+  ns.Frames.Spawn() ns.Blizzard.Apply() runTimers()
+  check(ns.Frames.byKey.focus ~= nil and FocusFrame._parent == ns.Blizzard.hiddenParent, "focus on: Nyte focus frame, Blizzard's hidden")
+  -- hidden buttons skip work; UNIT_FLAGS only redraws on a state change
+  local hb
+  for _, b in ipairs(ns.Raid.buttons) do if not b._shown then hb = b break end end
+  local calls = 0
+  local realHealth = ns.UnitButton.UpdateHealth
+  ns.UnitButton.Dispatch = (function(orig) return function(...) calls = calls + 1 return orig(...) end end)(ns.UnitButton.Dispatch)
+  if hb then hb._scripts.OnEvent(hb, "UNIT_HEALTH") end
+  check(hb == nil or calls == 0, "hidden raid button ignores events")
+  local pb = ns.Frames.byKey.player
+  local full = 0
+  local origAll = ns.UnitButton.UpdateAll
+  ns.UnitButton.UpdateAll = function(...) full = full + 1 return origAll(...) end
+  pb.lastState = nil
+  ns.UnitButton.UpdateFlags(pb)
+  check(full == 0, "UNIT_FLAGS without a state change does no full redraw")
+  pb.lastState = "Dead"
+  ns.UnitButton.UpdateFlags(pb)
+  check(full == 1, "UNIT_FLAGS after a death/revive redraws")
+  ns.UnitButton.UpdateAll = origAll
+  check(ns.Overlays.EVENTS.UNIT_HEALTH == nil, "heal/absorb bars don't recompute on every health tick")
+  -- profiler
+  SlashCmdList.NYTEFRAMES("perf 30")
+  check(ns.Perf.on, "/nf perf starts the profiler")
+  pb._scripts.OnEvent(pb, "UNIT_HEALTH")
+  fire("PLAYER_TARGET_CHANGED")
+  SlashCmdList.NYTEFRAMES("perf stop")
+  local pr = NyteFramesProbeDB.perf and NyteFramesProbeDB.perf[1]
+  check(not ns.Perf.on and pr and pr.calls >= 2, "perf results saved")
+  local names = {}
+  for _, r in ipairs(pr and pr.rows or {}) do names[r.name] = true end
+  check(names["UNIT_HEALTH (player)"] and names.PLAYER_TARGET_CHANGED, "perf rows per event and frame")
+  SlashCmdList.NYTEFRAMES("blizzard")
 end
 
 check(#ns.errors == 0, "addon caught errors: " .. table.concat(ns.errors, " | "))

@@ -1,7 +1,7 @@
 -- Init.lua: namespace, event bus, slash commands.
 local ADDON, NF = ...
 NF.ADDON = ADDON
-NF.VERSION = "0.9.0"
+NF.VERSION = "0.10.0"
 _G.NyteFrames = NF -- for /dump and other addons; nothing secure reads it
 
 local PREFIX = "|cff8a7dffNyte Frames|r: "
@@ -59,10 +59,13 @@ end
 frame:SetScript("OnEvent", function(_, event, ...)
   local list = handlers[event]
   if not list then return end
+  local perf = NF.Perf and NF.Perf.on
+  local t0 = perf and NF.Perf.Now()
   for i = 1, #list do
     local ok, err = pcall(list[i], event, ...)
     if not ok then NF.Error(event, err) end
   end
+  if perf then NF.Perf.Add(event, NF.Perf.Now() - t0) end
 end)
 
 ---------------------------------------------------------------------------
@@ -100,6 +103,8 @@ commands.help = function()
   print("  /nf probe reset      - clear everything the probe recorded")
   print("  /nf auras            - status of the Blizzard aura icons on Nyte frames")
   print("  /nf errors           - list Lua errors Nyte Frames caught")
+  print("  /nf blizzard         - which Blizzard frames are hidden / showing")
+  print("  /nf perf [seconds]   - profile Nyte Frames' CPU use (default 60s)")
   print("  /nf profiles         - profiles window (switch, copy, rename, delete, reset)")
   print("  /nf profile [name]   - show the active profile, or switch to [name]")
   print("  /nf export | import  - share exact settings as a NYTEFRAMES1: string")
@@ -141,6 +146,12 @@ end
 commands.profiles = function() NF.Profiles.Toggle() end
 commands.export = function() NF.Profiles.Show("export") end
 commands.import = function() NF.Profiles.Show("import") end
+
+commands.perf = function(rest) NF.Perf.Command(rest) end
+commands.blizzard = function()
+  NF.Print("Blizzard frames:")
+  for _, line in ipairs(NF.Blizzard.Status()) do print(line) end
+end
 
 commands.probe = function(rest)
   NF.Probe.Command(rest)

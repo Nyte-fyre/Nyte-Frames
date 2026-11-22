@@ -110,6 +110,15 @@ def main():
         lines.append(f"- {ctx}: " + "; ".join(f"{e} {c}" for e, c in sorted(evs.items())))
     lines += ["", "## events (last 150)"]
     lines += [f"- {e}" for e in db.get("events", [])[-150:]]
+    lines += ["", "## perf (/nf perf, newest first)"]
+    for r in db.get("perf", []) or []:
+        lines.append(f"- {r.get('at')} v{r.get('version')} {r.get('context')}: {r.get('seconds', 0):.0f}s, "
+                     f"{r.get('calls')} runs, {r.get('msPerSec', 0):.2f} ms/s, peak {r.get('peakMs', 0):.2f} ms, "
+                     f"mem {r.get('memKB') or 0:.0f} KB")
+        for x in (r.get("rows") or [])[:12]:
+            n = x.get("n") or 1
+            lines.append(f"  - {x.get('name')}: {x.get('n')} runs, {x.get('ms', 0):.2f} ms, "
+                         f"avg {x.get('ms', 0) / n:.3f}, max {x.get('max', 0):.2f}")
     lines += ["", "## errors"]
     lines += [f"- {e}" for e in db.get("errors", [])] or ["- none"]
     text = "\n".join(lines)

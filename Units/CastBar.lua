@@ -107,8 +107,11 @@ function CB.Create(b)
   bar:Hide()
   bar:SetScript("OnUpdate", onUpdate) -- runs only while a cast is showing
   bar:SetScript("OnEvent", function(self, event)
+    local perf = NF.Perf.on
+    local t0 = perf and NF.Perf.Now()
     local ok, err = pcall(onEvent, self, event)
     if not ok then NF.Error("castbar " .. tostring(event), err) end
+    if perf then NF.Perf.Add("cast bar (" .. b.key .. ")", NF.Perf.Now() - t0) end
   end)
   for _, e in ipairs(EVENTS) do pcall(bar.RegisterUnitEvent, bar, e, b.unit) end
   b.castBar = bar
