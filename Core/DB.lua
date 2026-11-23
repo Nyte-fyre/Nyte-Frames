@@ -33,6 +33,7 @@ local function frameDefaults(t)
     nameColor = "white",       -- white | black | gold | gray | class | reaction
     showName = true, showHealthText = true, showPowerText = false,
     showLevel = false,         -- level + Elite / Rare / Boss before the name (player/target/focus/boss)
+    levelPlate = 45,           -- opacity % of the dark plate behind the level text (0 = none)
     auras = {
       buffs = true, debuffs = true, max = 8, size = 18, growth = "RIGHT",
       onlyMine = false, hideLong = false, dispellableFirst = false, filter = {},

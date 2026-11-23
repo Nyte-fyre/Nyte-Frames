@@ -173,7 +173,7 @@ function UB.Create(key, unit, globalName)
   -- bar of the same color (hostile red, friendly green)
   b.levelBg = b.textLayer:CreateTexture(nil, "ARTWORK")
   b.levelBg:SetTexture(NF.Media.FLAT)
-  b.levelBg:SetVertexColor(0, 0, 0, 0.45)
+  b.levelBg:SetVertexColor(0, 0, 0, 0.45) -- opacity from levelPlate in UpdateLevel
   b.levelBg:SetPoint("TOPLEFT", b.levelText, "TOPLEFT", -3, 2)
   b.levelBg:SetPoint("BOTTOMRIGHT", b.levelText, "BOTTOMRIGHT", 3, -2)
   b.levelBg:Hide()
@@ -514,7 +514,9 @@ function UB.UpdateLevel(b)
   if text then
     b.levelText:SetText(text)
     b.levelText:Show()
-    b.levelBg:Show()
+    local a = math.max(0, math.min(100, tonumber(cfgOf(b).levelPlate) or 45)) / 100
+    b.levelBg:SetVertexColor(0, 0, 0, a)
+    b.levelBg:SetShown(a > 0)
     local okW, sw = pcall(b.levelText.GetStringWidth, b.levelText)
     lw = (okW and type(sw) == "number") and math.ceil(sw) + 8 or 0
   else

@@ -342,6 +342,8 @@ local function build()
   widgets.level = checkbox(window, L["Level and Elite / Rare tag"],
     function() return cfg().showLevel end, function(v) cfg().showLevel = v changed() end)
   widgets.level:SetPoint("TOPLEFT", 14, py - 240)
+  widgets.levelPlate = slider(window, L["Level background opacity %"], 0, 100, 5,
+    function() return cfg().levelPlate end, function(v) cfg().levelPlate = v changed() end)
   widgets.reset = button(window, L["Reset this frame"], 140, function()
     NF.Frames.ResetFrame(current)
     Settings.Show(current)
@@ -361,7 +363,7 @@ local function build()
   note:SetWidth(470)
   window.note = note
   window.columnsTop = py - 32
-  for _, n in ipairs({ "width", "height", "power", "columns" }) do widgets[n]:SetWidth(200) end
+  for _, n in ipairs({ "width", "height", "power", "columns", "levelPlate" }) do widgets[n]:SetWidth(200) end
   widgets.frameText:SetWidth(240)
   widgets.nameColor:SetWidth(240)
 end
@@ -370,7 +372,7 @@ end
 -- overlap), then the buttons and the note under the taller one; the window
 -- grows to fit. Step heights: checkbox 22, cycle 28, slider 44 (label above).
 local LEFT_COL = { { "width", L["slider"] }, { "height", L["slider"] }, { "power", L["slider"] },
-  { "frameText", "cycle" }, { "nameColor", "cycle" }, { "powerText", "check" }, { "level", "check" }, { "columns", L["slider"] } }
+  { "frameText", "cycle" }, { "nameColor", "cycle" }, { "powerText", "check" }, { "level", "check" }, { "levelPlate", "slider" }, { "columns", L["slider"] } }
 local RIGHT_COL = { { "castBar", "check" }, { "buffs", L["check"] }, { "debuffs", L["check"] },
   { "healPred", "check" }, { "absorbs", L["check"] }, { "threat", L["check"] }, { "range", L["check"] },
   { "roleIcon", "check" }, { "statusIcon", "check" },
@@ -441,6 +443,7 @@ function Settings.Show(key)
   widgets.frameText:SetShown(current ~= "player")
   widgets.columns:SetShown(current == "raid")
   widgets.level:SetShown(current == "player" or current == "target" or current == "focus" or current == "boss")
+  widgets.levelPlate:SetShown(widgets.level:IsShown())
   local group = (current == "party" or current == "raid")
   widgets.castBar:SetShown(current == "player" or current == "target" or current == "boss")
   widgets.range:SetShown(group)

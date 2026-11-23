@@ -33,7 +33,7 @@ local RANGES = {
   width = { 10, 2000 }, height = { 4, 1000 }, powerHeightPct = { 0, 100 },
   size = { 4, 100 }, max = { 0, 40 }, maxColumnsPerRow = { 1, 8 },
   fontSize = { 4, 64 }, borderSize = { 1, 4 }, rangeAlpha = { 0, 1 }, grid = { 2, 200 }, spacing = { 0, 100 },
-  smallPowerPct = { 0, 100 }, largePowerPct = { 0, 100 },
+  smallPowerPct = { 0, 100 }, largePowerPct = { 0, 100 }, levelPlate = { 0, 100 },
 }
 local ROLES = { TANK = true, HEALER = true, DAMAGER = true }
 local MAX_STR = 64

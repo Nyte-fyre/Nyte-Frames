@@ -48,7 +48,7 @@ function FrameMethods.SetText(self, v) self._text = v end
 function FrameMethods.GetText(self) return self._text end
 function FrameMethods.SetAlphaFromBoolean(self, v, a, b) self._alphaFromBool = { a, b } end
 function FrameMethods.SetVertexColorFromBoolean(self) self._colorFromBool = true end
-function FrameMethods.SetVertexColor(self, r, g, b) self._color = { r, g, b } end
+function FrameMethods.SetVertexColor(self, r, g, b, a) self._color = { r, g, b, a } end
 function FrameMethods.SetTextColor(self, r, g, b) self._textColor = { r, g, b } end
 function FrameMethods.GetParent(self) return self._parent end
 -- like the client: no fill until SetStatusBarTexture, and each call may swap the object
@@ -1223,6 +1223,18 @@ do
   check(tb.levelWidth == 48 and nameW == tb.nameMaxW - 48, "name width shrinks by the level text")
   check(tb.levelBg._shown and tb.levelBg._anchors.TOPLEFT.rel == tb.levelText, "dark plate sits behind the level")
   check(tb.levelBg._color[1] == 0 and tb.levelBg._color[2] == 0, "level plate is black")
+  check(ns.profile.frames.target.levelPlate == 45 and math.abs(tb.levelBg._color[4] - 0.45) < 1e-9, "plate defaults to 45% opacity")
+  ns.profile.frames.target.levelPlate = 80
+  UBm.UpdateAll(tb)
+  check(math.abs(tb.levelBg._color[4] - 0.8) < 1e-9 and tb.levelBg._shown, "plate opacity follows the setting")
+  ns.profile.frames.target.levelPlate = 0
+  UBm.UpdateAll(tb)
+  check(not tb.levelBg._shown and tb.levelText._shown, "0% hides the plate, keeps the level")
+  ns.profile.frames.target.levelPlate = 250
+  UBm.UpdateAll(tb)
+  check(tb.levelBg._color[4] == 1, "opacity is clamped to 100%")
+  ns.profile.frames.target.levelPlate = 45
+  UBm.UpdateAll(tb)
   ns.profile.frames.target.showLevel = false
   UBm.Layout(tb)
   check(not tb.levelText._shown and not tb.levelBg._shown and tb.nameText._w == tb.nameMaxW, "turning it off gives the name its width back")
