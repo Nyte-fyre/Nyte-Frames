@@ -149,6 +149,7 @@ L["Height"] = "Height"
 L["I can dispel"] = "I can dispel"
 L["Incoming heals"] = "Incoming heals"
 L["Latency on cast bar"] = "Latency on cast bar"
+L["Level and Elite / Rare tag"] = "Level and Elite / Rare tag"
 L["Mana / energy tick spark"] = "Mana / energy tick spark"
 L["Max auras"] = "Max auras"
 L["Moving border"] = "Moving border"
@@ -223,5 +224,8 @@ L["the client blocked automatic inspecting; roles now come from group roles, rai
 
 -- Units/UnitButton.lua
 L["Dead"] = "Dead"
+L["Elite"] = "Elite"
 L["Ghost"] = "Ghost"
 L["Offline"] = "Offline"
+L["Rare"] = "Rare"
+L["Rare Elite"] = "Rare Elite"

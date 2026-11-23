@@ -10,6 +10,7 @@ your player frame, sorted tank, healer, DPS, and grow to the left as groups are 
 - Heal prediction, absorbs, threat border, range fade, raid marker, leader, ready check / summon / res icons
 - Debuff highlight (dispel tint, bigger boss debuffs) using Blizzard's own aura display, so it works in combat
 - Cast bars with a latency zone; mana tick and five-second-rule sparks on the player power bar
+- Level with an Elite / Rare / Boss tag on the player and target frames
 - Drag, resize, grid and snap in `/nf unlock`; profiles with import/export strings
 - Border thickness, name colors, text formats, textures and fonts (LibSharedMedia)
 - Optional Masque skins for the buff row and cast bar icons

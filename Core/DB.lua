@@ -32,6 +32,7 @@ local function frameDefaults(t)
     textMode = nil,            -- nil = use general.textMode
     nameColor = "white",       -- white | black | gold | gray | class | reaction
     showName = true, showHealthText = true, showPowerText = false,
+    showLevel = false,         -- level + Elite / Rare / Boss before the name (player/target/focus/boss)
     auras = {
       buffs = true, debuffs = true, max = 8, size = 18, growth = "RIGHT",
       onlyMine = false, hideLong = false, dispellableFirst = false, filter = {},
@@ -66,12 +67,12 @@ DB.DEFAULTS = {
   },
   frames = {
     player = frameDefaults({ width = 195, height = 60, refPos = { x = -271, y = -201 },
-      showPowerText = true, castBar = true,
+      showPowerText = true, showLevel = true, castBar = true,
       auras = { buffs = false, debuffs = false, max = 16, size = 20, growth = "RIGHT",
         onlyMine = false, hideLong = false, dispellableFirst = false, filter = {},
         bigBossDebuffs = true, onlyDispellable = false } }),
     target = frameDefaults({ width = 195, height = 60, refPos = { x = 289, y = -201 },
-      castBar = true, auras = { buffs = true, debuffs = true, max = 16, size = 20, growth = "RIGHT",
+      castBar = true, showLevel = true, auras = { buffs = true, debuffs = true, max = 16, size = 20, growth = "RIGHT",
         onlyMine = false, hideLong = false, dispellableFirst = false, filter = {},
         bigBossDebuffs = true, onlyDispellable = false } }),
     targettarget = frameDefaults({ width = 120, height = 32, refPos = { x = 287, y = -114 },

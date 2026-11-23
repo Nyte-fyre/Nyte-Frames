@@ -1175,6 +1175,75 @@ do
   ns.Skin.Masque = real
 end
 
+-- level + Elite / Rare / Boss text on player and target
+do
+  local UBm = ns.UnitButton
+  local tb, pb = ns.Frames.byKey.target, ns.Frames.byKey.player
+  local realLevel, realClass = UnitLevel, UnitClassification
+  local function plainText(fs) return ((fs._text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+  local function show(level, class)
+    UnitLevel = function(u) if u == "target" then return level end return 60 end
+    UnitClassification = function(u) if u == "target" then return class end return "normal" end
+    UBm.UpdateAll(tb)
+    return plainText(tb.levelText)
+  end
+  check(ns.profile.frames.player.showLevel and ns.profile.frames.target.showLevel, "level text is on for player and target by default")
+  check(not ns.profile.frames.party.showLevel and not ns.profile.frames.targettarget.showLevel, "level text is off on small frames")
+  check(show(61, "normal") == "61", "regular mob: level only")
+  check(show(61, "trivial") == "61" and show(61, "minus") == "61", "trivial / minus mobs get no tag")
+  check(show(62, "elite") == "62 Elite", "elite tag")
+  check(show(60, "rare") == "60 Rare", "rare tag")
+  check(show(60, "rareelite") == "60 Rare Elite", "rare elite tag")
+  check(show(-1, "worldboss") == "?? Boss", "boss: skull level and Boss tag")
+  check(show(-1, "elite") == "?? Elite", "skull-level elite")
+  check(tb.levelText._shown, "target level text is shown")
+  -- colors: elite gold, rare silver, boss red, level by difficulty
+  show(62, "elite")
+  check(tb.levelText._text:find("|cffffd100Elite|r", 1, true), "elite is gold")
+  show(60, "rare")
+  check(tb.levelText._text:find("|cffc7c7d9Rare|r", 1, true), "rare is silver")
+  show(-1, "worldboss")
+  check(tb.levelText._text:find("|cffff4040??|r |cffff4040Boss|r", 1, true), "boss level and tag are red")
+  GetCreatureDifficultyColor = function(l) return l >= 65 and { r = 1, g = 0.1, b = 0.1 } or { r = 0.25, g = 0.75, b = 0.25 } end
+  show(66, "normal")
+  check(tb.levelText._text:find("|cffff1a1a66|r", 1, true), "high level colored by difficulty")
+  show(55, "normal")
+  check(tb.levelText._text:find("|cff40bf4055|r", 1, true), "low level colored by difficulty")
+  GetCreatureDifficultyColor = nil
+  -- secret values never error; the text just hides
+  UnitLevel = function(u) return secret(60) end
+  UnitClassification = function(u) return secret("elite") end
+  UBm.UpdateAll(tb)
+  check(not tb.levelText._shown, "secret level hides the text")
+  -- the name moves right of the level text and gets the rest of the width
+  UnitLevel, UnitClassification = function() return 62 end, function() return "elite" end
+  tb.levelText.GetStringWidth = function() return 40 end
+  UBm.UpdateAll(tb)
+  local nameW = tb.nameText._w
+  check(tb.levelWidth == 44 and nameW == tb.nameMaxW - 44, "name width shrinks by the level text")
+  ns.profile.frames.target.showLevel = false
+  UBm.Layout(tb)
+  check(not tb.levelText._shown and tb.nameText._w == tb.nameMaxW, "turning it off gives the name its width back")
+  ns.profile.frames.target.showLevel = true
+  tb.levelText.GetStringWidth = nil
+  -- events
+  UnitLevel = function() return 63 end
+  ns.UnitButton.Dispatch(tb, "UNIT_LEVEL")
+  check(plainText(tb.levelText) == "63 Elite", "UNIT_LEVEL updates the text")
+  UnitClassification = function() return "rare" end
+  ns.UnitButton.Dispatch(tb, "UNIT_CLASSIFICATION_CHANGED")
+  check(plainText(tb.levelText) == "63 Rare", "UNIT_CLASSIFICATION_CHANGED updates the tag")
+  local ev = {}
+  for _, e in ipairs(UBm.UNIT_EVENTS) do ev[e] = true end
+  check(ev.UNIT_LEVEL and ev.UNIT_CLASSIFICATION_CHANGED, "unit buttons register level / classification events")
+  UnitLevel, UnitClassification = realLevel, realClass
+  UBm.UpdateAll(pb)
+  check(plainText(pb.levelText) == "60", "player shows its level")
+  fire("PLAYER_LEVEL_UP", 61)
+  UBm.UpdateAll(tb)
+  check(plainText(tb.levelText) == "?? Boss", "default mock target is a boss")
+end
+
 -- localization: English fallback, a locale file fills L, the template parses
 do
   local L = ns.L

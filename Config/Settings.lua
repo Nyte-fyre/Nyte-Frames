@@ -339,6 +339,9 @@ local function build()
   widgets.powerText = checkbox(window, L["Show power text"],
     function() return cfg().showPowerText end, function(v) cfg().showPowerText = v changed() end)
   widgets.powerText:SetPoint("TOPLEFT", 14, py - 218)
+  widgets.level = checkbox(window, L["Level and Elite / Rare tag"],
+    function() return cfg().showLevel end, function(v) cfg().showLevel = v changed() end)
+  widgets.level:SetPoint("TOPLEFT", 14, py - 240)
   widgets.reset = button(window, L["Reset this frame"], 140, function()
     NF.Frames.ResetFrame(current)
     Settings.Show(current)
@@ -367,7 +370,7 @@ end
 -- overlap), then the buttons and the note under the taller one; the window
 -- grows to fit. Step heights: checkbox 22, cycle 28, slider 44 (label above).
 local LEFT_COL = { { "width", L["slider"] }, { "height", L["slider"] }, { "power", L["slider"] },
-  { "frameText", "cycle" }, { "nameColor", "cycle" }, { "powerText", "check" }, { "columns", L["slider"] } }
+  { "frameText", "cycle" }, { "nameColor", "cycle" }, { "powerText", "check" }, { "level", "check" }, { "columns", L["slider"] } }
 local RIGHT_COL = { { "castBar", "check" }, { "buffs", L["check"] }, { "debuffs", L["check"] },
   { "healPred", "check" }, { "absorbs", L["check"] }, { "threat", L["check"] }, { "range", L["check"] },
   { "roleIcon", "check" }, { "statusIcon", "check" },
@@ -437,6 +440,7 @@ function Settings.Show(key)
   -- the player frame always shows "# | %"
   widgets.frameText:SetShown(current ~= "player")
   widgets.columns:SetShown(current == "raid")
+  widgets.level:SetShown(current == "player" or current == "target" or current == "focus" or current == "boss")
   local group = (current == "party" or current == "raid")
   widgets.castBar:SetShown(current == "player" or current == "target" or current == "boss")
   widgets.range:SetShown(group)

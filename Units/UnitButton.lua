@@ -119,7 +119,8 @@ UB.UNIT_EVENTS = { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_M
   "UNIT_DISPLAYPOWER", "UNIT_NAME_UPDATE", "UNIT_CONNECTION", "UNIT_FLAGS", "UNIT_FACTION",
   "UNIT_HEAL_PREDICTION", "UNIT_ABSORB_AMOUNT_CHANGED", "UNIT_HEAL_ABSORB_AMOUNT_CHANGED",
   "UNIT_THREAT_SITUATION_UPDATE", "UNIT_IN_RANGE_UPDATE",
-  "INCOMING_RESURRECT_CHANGED", "INCOMING_SUMMON_CHANGED" }
+  "INCOMING_RESURRECT_CHANGED", "INCOMING_SUMMON_CHANGED",
+  "UNIT_LEVEL", "UNIT_CLASSIFICATION_CHANGED" }
 UB.all = {}
 
 -- key = settings key ("party"); globalName defaults to NyteFrames_<key>
@@ -166,12 +167,15 @@ function UB.Create(key, unit, globalName)
   b.nameText = b.textLayer:CreateFontString(nil, "OVERLAY")
   b.healthText = b.textLayer:CreateFontString(nil, "OVERLAY")
   b.powerText = b.textLayer:CreateFontString(nil, "OVERLAY")
-  for _, fs in ipairs({ b.nameText, b.healthText, b.powerText }) do
+  b.levelText = b.textLayer:CreateFontString(nil, "OVERLAY")
+  b.levelText:Hide()
+  for _, fs in ipairs({ b.nameText, b.healthText, b.powerText, b.levelText }) do
     fs:SetWordWrap(false)
     fs:SetShadowOffset(1, -1)
     fs:SetShadowColor(0, 0, 0, 1)
   end
   b.nameText:SetJustifyH("LEFT")
+  b.levelText:SetJustifyH("LEFT")
   b.healthText:SetJustifyH("RIGHT")
   b.powerText:SetJustifyH("RIGHT")
 
@@ -288,6 +292,7 @@ function UB.Layout(b)
   b.nameText:SetFont(font, size, "")
   b.healthText:SetFont(font, size, "")
   b.powerText:SetFont(font, math.max(8, size - 2), "")
+  b.levelText:SetFont(font, size, "")
 
   NF.Overlays.Layout(b, w, h)
   if b.key == "player" and NF.ManaTicks then NF.ManaTicks.Layout(b) end
@@ -308,6 +313,7 @@ function UB.Layout(b)
     b.nameText:SetShown(cfg.showName)
     b.healthText:SetShown(cfg.showHealthText)
     b.powerText:Hide()
+    b.levelText:Hide()
     UB.SetRole(b, b.role)
     UB.UpdateAll(b)
     return
@@ -318,9 +324,9 @@ function UB.Layout(b)
   b.healthText:ClearAllPoints()
   b.healthText:SetPoint("RIGHT", b.health, "RIGHT", -4, 0)
   b.healthText:SetWidth(reserve)
-  b.nameText:ClearAllPoints()
-  b.nameText:SetPoint("LEFT", b.health, "LEFT", 4, 0)
-  b.nameText:SetWidth(math.max(10, w - reserve - 12))
+  b.levelText:ClearAllPoints()
+  b.levelText:SetPoint("LEFT", b.health, "LEFT", 4, 0)
+  b.nameMaxW = math.max(10, w - reserve - 12)
   b.nameText:SetShown(cfg.showName)
   b.healthText:SetShown(cfg.showHealthText)
   b.powerText:ClearAllPoints()
@@ -453,6 +459,64 @@ function UB.UpdatePower(b)
   end
 end
 
+-- Level + classification, e.g. "62 Elite", "60 Rare", "?? Boss". Returns the
+-- display string (with color codes) or nil. Level -1 is a skull (too high to
+-- see). The level is colored by difficulty against the player's level.
+UB.CLASSIFICATION_COLOR = { elite = "ffd100", rare = "c7c7d9", rareelite = "c7c7d9", worldboss = "ff4040" }
+-- normal / trivial / minus get no tag
+function UB.ClassificationLabel(class)
+  local L = NF.L
+  if class == "elite" then return L["Elite"] end
+  if class == "rare" then return L["Rare"] end
+  if class == "rareelite" then return L["Rare Elite"] end
+  if class == "worldboss" then return L["Boss"] end
+  return nil
+end
+local function hex(c)
+  if type(c) ~= "table" or type(c.r) ~= "number" then return nil end
+  return string.format("%02x%02x%02x", math.floor(c.r * 255 + 0.5), math.floor(c.g * 255 + 0.5), math.floor(c.b * 255 + 0.5))
+end
+
+function UB.LevelText(u)
+  local level = Plain(Try(UnitLevel, u))
+  local class = Plain(Try(UnitClassification, u))
+  if type(level) ~= "number" then return nil end
+  local lvl, col
+  if level < 0 then
+    lvl, col = "??", "ff4040"
+  else
+    lvl = tostring(level)
+    local okD, c = pcall(GetCreatureDifficultyColor, level)
+    if not okD or type(c) ~= "table" then okD, c = pcall(GetQuestDifficultyColor, level) end
+    col = (okD and hex(c)) or "ffd100"
+  end
+  local s = "|cff" .. col .. lvl .. "|r"
+  local tag = type(class) == "string" and UB.ClassificationLabel(class)
+  if tag then s = s .. " |cff" .. UB.CLASSIFICATION_COLOR[class] .. tag .. "|r" end
+  return s
+end
+
+-- Shows the level text left of the name (player/target, when enabled) and
+-- gives the name whatever width is left.
+function UB.UpdateLevel(b)
+  if b.compact then return end
+  local text = cfgOf(b).showLevel and UB.LevelText(b.unit) or nil
+  local lw = 0
+  if text then
+    b.levelText:SetText(text)
+    b.levelText:Show()
+    local okW, sw = pcall(b.levelText.GetStringWidth, b.levelText)
+    lw = (okW and type(sw) == "number") and math.ceil(sw) + 4 or 0
+  else
+    b.levelText:SetText("")
+    b.levelText:Hide()
+  end
+  b.levelWidth = lw
+  b.nameText:ClearAllPoints()
+  b.nameText:SetPoint("LEFT", b.health, "LEFT", 4 + lw, 0)
+  b.nameText:SetWidth(math.max(10, (b.nameMaxW or 80) - lw))
+end
+
 function UB.UpdateAll(b)
   if not b:IsShown() and b.unit ~= "player" then return end
   local exists = Plain(Try(UnitExists, b.unit))
@@ -460,6 +524,7 @@ function UB.UpdateAll(b)
   b.lastState = unitState(b.unit)
   UB.UpdateColors(b)
   UB.UpdateName(b)
+  UB.UpdateLevel(b)
   UB.UpdateHealth(b)
   UB.UpdatePower(b)
   NF.Overlays.UpdateAll(b)
@@ -476,6 +541,7 @@ local HANDLERS = {
   UNIT_HEALTH = UB.UpdateHealth, UNIT_MAXHEALTH = UB.UpdateHealth,
   UNIT_POWER_UPDATE = UB.UpdatePower, UNIT_MAXPOWER = UB.UpdatePower,
   UNIT_DISPLAYPOWER = UB.UpdatePower, UNIT_NAME_UPDATE = UB.UpdateName,
+  UNIT_LEVEL = UB.UpdateLevel, UNIT_CLASSIFICATION_CHANGED = UB.UpdateLevel,
   UNIT_CONNECTION = UB.UpdateAll, UNIT_FLAGS = UB.UpdateFlags, UNIT_FACTION = UB.UpdateColors,
 }
 

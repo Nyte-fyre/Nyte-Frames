@@ -161,6 +161,13 @@ local function updateKey(key)
   end
 end
 NF.On("PLAYER_FOCUS_CHANGED", function() updateKey("focus") end)
+-- level colors on other frames are relative to the player's level
+NF.On("PLAYER_LEVEL_UP", function()
+  for _, key in ipairs({ "player", "target", "focus" }) do
+    local b = Frames.byKey[key]
+    if b then pcall(UB.UpdateLevel, b) end
+  end
+end)
 NF.On("UNIT_PET", function(_, unit)
   if not NF.Compat.IsSecret(unit) and unit == "player" then updateKey("pet") end
 end)
