@@ -3,6 +3,8 @@
 ## Notes: Flat, resizable unit frames with role-sorted party and raid columns.
 ## Author: Nyte
 ## Version: 0.17.0
+## X-License: MIT
+## X-Curse-Project-ID: 1825705
 ## OptionalDeps: Masque
 ## SavedVariables: NyteFramesDB, NyteFramesProbeDB
 ## SavedVariablesPerCharacter: NyteFramesCharDB
