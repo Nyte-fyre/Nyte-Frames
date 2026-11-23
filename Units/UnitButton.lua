@@ -169,6 +169,14 @@ function UB.Create(key, unit, globalName)
   b.powerText = b.textLayer:CreateFontString(nil, "OVERLAY")
   b.levelText = b.textLayer:CreateFontString(nil, "OVERLAY")
   b.levelText:Hide()
+  -- dark plate behind the level so a red/green level stays readable on a
+  -- bar of the same color (hostile red, friendly green)
+  b.levelBg = b.textLayer:CreateTexture(nil, "ARTWORK")
+  b.levelBg:SetTexture(NF.Media.FLAT)
+  b.levelBg:SetVertexColor(0, 0, 0, 0.65)
+  b.levelBg:SetPoint("TOPLEFT", b.levelText, "TOPLEFT", -3, 2)
+  b.levelBg:SetPoint("BOTTOMRIGHT", b.levelText, "BOTTOMRIGHT", 3, -2)
+  b.levelBg:Hide()
   for _, fs in ipairs({ b.nameText, b.healthText, b.powerText, b.levelText }) do
     fs:SetWordWrap(false)
     fs:SetShadowOffset(1, -1)
@@ -292,7 +300,7 @@ function UB.Layout(b)
   b.nameText:SetFont(font, size, "")
   b.healthText:SetFont(font, size, "")
   b.powerText:SetFont(font, math.max(8, size - 2), "")
-  b.levelText:SetFont(font, size, "")
+  b.levelText:SetFont(font, size, "OUTLINE")
 
   NF.Overlays.Layout(b, w, h)
   if b.key == "player" and NF.ManaTicks then NF.ManaTicks.Layout(b) end
@@ -314,6 +322,7 @@ function UB.Layout(b)
     b.healthText:SetShown(cfg.showHealthText)
     b.powerText:Hide()
     b.levelText:Hide()
+    b.levelBg:Hide()
     UB.SetRole(b, b.role)
     UB.UpdateAll(b)
     return
@@ -325,7 +334,7 @@ function UB.Layout(b)
   b.healthText:SetPoint("RIGHT", b.health, "RIGHT", -4, 0)
   b.healthText:SetWidth(reserve)
   b.levelText:ClearAllPoints()
-  b.levelText:SetPoint("LEFT", b.health, "LEFT", 4, 0)
+  b.levelText:SetPoint("LEFT", b.health, "LEFT", 6, 0)
   b.nameMaxW = math.max(10, w - reserve - 12)
   b.nameText:SetShown(cfg.showName)
   b.healthText:SetShown(cfg.showHealthText)
@@ -505,11 +514,13 @@ function UB.UpdateLevel(b)
   if text then
     b.levelText:SetText(text)
     b.levelText:Show()
+    b.levelBg:Show()
     local okW, sw = pcall(b.levelText.GetStringWidth, b.levelText)
-    lw = (okW and type(sw) == "number") and math.ceil(sw) + 4 or 0
+    lw = (okW and type(sw) == "number") and math.ceil(sw) + 8 or 0
   else
     b.levelText:SetText("")
     b.levelText:Hide()
+    b.levelBg:Hide()
   end
   b.levelWidth = lw
   b.nameText:ClearAllPoints()

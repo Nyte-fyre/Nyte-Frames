@@ -1214,16 +1214,18 @@ do
   UnitLevel = function(u) return secret(60) end
   UnitClassification = function(u) return secret("elite") end
   UBm.UpdateAll(tb)
-  check(not tb.levelText._shown, "secret level hides the text")
+  check(not tb.levelText._shown and not tb.levelBg._shown, "secret level hides the text and plate")
   -- the name moves right of the level text and gets the rest of the width
   UnitLevel, UnitClassification = function() return 62 end, function() return "elite" end
   tb.levelText.GetStringWidth = function() return 40 end
   UBm.UpdateAll(tb)
   local nameW = tb.nameText._w
-  check(tb.levelWidth == 44 and nameW == tb.nameMaxW - 44, "name width shrinks by the level text")
+  check(tb.levelWidth == 48 and nameW == tb.nameMaxW - 48, "name width shrinks by the level text")
+  check(tb.levelBg._shown and tb.levelBg._anchors.TOPLEFT.rel == tb.levelText, "dark plate sits behind the level")
+  check(tb.levelBg._color[1] == 0 and tb.levelBg._color[2] == 0, "level plate is black")
   ns.profile.frames.target.showLevel = false
   UBm.Layout(tb)
-  check(not tb.levelText._shown and tb.nameText._w == tb.nameMaxW, "turning it off gives the name its width back")
+  check(not tb.levelText._shown and not tb.levelBg._shown and tb.nameText._w == tb.nameMaxW, "turning it off gives the name its width back")
   ns.profile.frames.target.showLevel = true
   tb.levelText.GetStringWidth = nil
   -- events
